@@ -1,0 +1,40 @@
+name: lint
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/**"
+      - "**.md"
+      - "!.github/workflows/lint.yml"
+  pull_request:
+    branches:
+      - main
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.2
+      - name: Cache go module
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: go-${{ hashFiles('**/go.sum') }}
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4
+          install-mode: binary
+          verify: false
+      - name: Test
+        run: |
+          make test

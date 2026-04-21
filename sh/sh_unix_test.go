@@ -58,7 +58,6 @@ func TestRunContext_CancelStopsCommand(t *testing.T) {
 }
 
 func TestRun_PackageLevelHelpers(t *testing.T) {
-
 	// redirect to null
 	old := os.Stdout
 	devNull, _ := os.Open(os.DevNull)

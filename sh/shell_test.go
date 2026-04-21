@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/duakc/mt/gosys"
+
 	"github.com/stretchr/testify/assert"
 )
 

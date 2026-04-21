@@ -13,6 +13,7 @@ import (
 func Run(command string) error {
 	return New().Run(command)
 }
+
 func RunContext(ctx context.Context, command string) error {
 	return New().RunContext(ctx, command)
 }

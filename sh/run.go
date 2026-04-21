@@ -2,7 +2,6 @@ package sh
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -42,7 +41,10 @@ type Cmd struct {
 	ExtendEnv []string
 
 	WorkDir string
-	Become  *BecomeOption
+	Become  BecomeOption
+
+	// Executed
+	ExecutedCmd *exec.Cmd
 }
 
 func (c *Cmd) Run(command string) error {
@@ -59,9 +61,9 @@ func (c *Cmd) RunContext(ctx context.Context, command string) error {
 	shell, shellArgs := ShellCommand(c.Shell)
 	runName = shell
 	runArgs = shellArgs
-	if suCommand, suCommandArg := BecomeCommand(*c.Become); c.Become != nil && suCommand != "" {
+	if suCommand, suCommandArg := BecomeCommand(c.Become); c.Become.Method != BecomeNone && suCommand != "" {
 		runArgs = append(suCommandArg, shell)
-		runArgs = append(runArgs, runArgs...)
+		runArgs = append(runArgs, shellArgs...)
 		runName = suCommand
 		// Force c.Stdin = os.Stdin when it hasn't been
 		// explicitly set by the caller (i.e. Cmd.Stdin == nil).
@@ -90,6 +92,7 @@ func (c *Cmd) RunContext(ctx context.Context, command string) error {
 	cc.Stderr = c.Stderr
 
 	err := cc.Run()
+	c.ExecutedCmd = cc
 	if err != nil {
 		shellErr := &ShellError{ShellPath: shell, ShellArgs: shellArgs, Err: err}
 		if becomed {
@@ -127,38 +130,13 @@ func (c *Cmd) CD(path string) *Cmd {
 }
 
 func (c *Cmd) BecomeUser(user string) *Cmd {
-	c.Become = &BecomeOption{BecomeUseDefault, user, ""}
+	c.Become = BecomeOption{BecomeUseDefault, user, ""}
 	return c
 }
 
 func (c *Cmd) BecomeFull(method BecomeMethod, user, group string) *Cmd {
-	c.Become = &BecomeOption{method, user, group}
+	c.Become = BecomeOption{method, user, group}
 	return c
-}
-
-type ShellError struct {
-	ShellPath string
-	ShellArgs []string
-
-	Become *BecomeOption
-	Err    error
-}
-
-func (e *ShellError) Error() string {
-	formatString := "exec shell `%s %v` "
-	formatArgs := []any{e.ShellPath, e.ShellArgs}
-
-	if e.Become != nil {
-		command, args := BecomeCommand(*e.Become)
-		formatString = formatString + "with `%s %v` "
-		formatArgs = append(formatArgs, command)
-		formatArgs = append(formatArgs, stringArrayToAny(args)...)
-	}
-	return fmt.Sprintf(formatString, formatArgs...)
-}
-
-func (e *ShellError) Unwrap() error {
-	return e.Err
 }
 
 func hasProgramInPath(p string) bool {

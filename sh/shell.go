@@ -42,7 +42,7 @@ var unixShellList = []struct {
 }{
 	{
 		shells:       []Shell{ShellBash, ShellZsh, ShellFish, ShellDash, ShellSh, ShellAsh, ShellMksh, ShellCsh, ShellTcsh, ShellRksh, ShellKsh},
-		defaultShell: ShellBash,
+		defaultShell: ShellSh,
 		platform:     gosys.IsLinux,
 	},
 	{
@@ -57,7 +57,7 @@ var unixShellList = []struct {
 	},
 	{
 		shells:       []Shell{ShellKsh, ShellSh, ShellCsh, ShellTcsh, ShellBash, ShellZsh, ShellFish, ShellMksh, ShellDash, ShellAsh, ShellRksh},
-		defaultShell: ShellKsh,
+		defaultShell: ShellSh,
 		platform:     gosys.IsOpenbsd,
 	},
 	{
@@ -72,12 +72,12 @@ var unixShellList = []struct {
 	},
 	{
 		shells:       []Shell{ShellAsh, ShellMksh, ShellSh, ShellBash, ShellZsh, ShellFish, ShellDash, ShellCsh, ShellTcsh, ShellRksh, ShellKsh},
-		defaultShell: ShellAsh,
+		defaultShell: ShellSh,
 		platform:     gosys.IsAndroid,
 	},
 	{
 		shells:       []Shell{ShellBash, ShellSh, ShellZsh, ShellFish, ShellDash, ShellAsh, ShellMksh, ShellCsh, ShellTcsh, ShellRksh, ShellKsh},
-		defaultShell: ShellBash,
+		defaultShell: ShellSh,
 		platform:     gosys.IsHurd,
 	},
 }

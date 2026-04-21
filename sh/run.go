@@ -12,29 +12,28 @@ import (
 )
 
 func Run(command string) error {
-	return New(command).Run()
+	return New().Run(command)
 }
 func RunContext(ctx context.Context, command string) error {
-	return New(command).RunContext(ctx)
+	return New().RunContext(ctx, command)
 }
 
-func New(command string) *Cmd {
-	return NewShell(ShellUseDefault, command)
+func New() *Cmd {
+	return NewShell(ShellUseDefault)
 }
 
-func NewShell(shell Shell, command string) *Cmd {
-	return create(shell, command)
+func NewShell(shell Shell) *Cmd {
+	return create(shell)
 }
 
-func create(shell Shell, command string) *Cmd {
-	c := &Cmd{Shell: shell, Command: command, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
+func create(shell Shell) *Cmd {
+	c := &Cmd{Shell: shell, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}
 
 	return c
 }
 
 type Cmd struct {
-	Command string
-	Shell   Shell
+	Shell Shell
 
 	Stdin  io.Reader
 	Stdout io.Writer
@@ -46,11 +45,11 @@ type Cmd struct {
 	Become  *BecomeOption
 }
 
-func (c *Cmd) Run() error {
-	return c.RunContext(context.Background())
+func (c *Cmd) Run(command string) error {
+	return c.RunContext(context.Background(), command)
 }
 
-func (c *Cmd) RunContext(ctx context.Context) error {
+func (c *Cmd) RunContext(ctx context.Context, command string) error {
 	var (
 		runName string
 		runArgs []string
@@ -82,7 +81,7 @@ func (c *Cmd) RunContext(ctx context.Context) error {
 		becomed = true
 	}
 
-	cc := exec.CommandContext(ctx, runName, append(runArgs, c.Command)...)
+	cc := exec.CommandContext(ctx, runName, append(runArgs, command)...)
 
 	cc.Env = append(os.Environ(), c.ExtendEnv...)
 	cc.Dir = c.WorkDir
@@ -124,6 +123,16 @@ func (c *Cmd) CD(path string) *Cmd {
 		panic(err.Error())
 	}
 	c.WorkDir = filepath.Clean(filepath.Join(wd, path))
+	return c
+}
+
+func (c *Cmd) BecomeUser(user string) *Cmd {
+	c.Become = &BecomeOption{BecomeUseDefault, user, ""}
+	return c
+}
+
+func (c *Cmd) BecomeFull(method BecomeMethod, user, group string) *Cmd {
+	c.Become = &BecomeOption{method, user, group}
 	return c
 }
 

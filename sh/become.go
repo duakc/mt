@@ -10,6 +10,7 @@ type BecomeMethod uint8
 
 const (
 	BecomeNone BecomeMethod = iota
+	BecomeUseDefault
 	BecomeUseSudo
 	BecomeUseSu
 
@@ -28,7 +29,12 @@ var (
 
 func DefaultBecomeMethod() BecomeMethod {
 	onceBecomeMethod.Do(func() {
-		if gosys.IsLinux || gosys.IsFreebsd || gosys.IsOpenbsd || gosys.IsNetbsd ||
+		defaultBecomeMethod = BecomeNone
+		if gosys.IsWindows && hasProgramInPath("sudo.exe") {
+			// https://github.com/microsoft/sudo
+			// https://news.ycombinator.com/item?id=47828853
+			defaultBecomeMethod = BecomeUseSudo
+		} else if gosys.IsLinux || gosys.IsFreebsd || gosys.IsOpenbsd || gosys.IsNetbsd ||
 			gosys.IsDragonfly {
 			switch {
 			case hasProgramInPath("sudo"):
@@ -64,6 +70,10 @@ type BecomeOption struct {
 }
 
 func BecomeCommand(option BecomeOption) (string, []string) {
+	if option.Method == BecomeUseDefault {
+		option.Method = DefaultBecomeMethod()
+	}
+
 	if option.Method == BecomeNone {
 		return "", nil
 	}

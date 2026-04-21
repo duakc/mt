@@ -29,7 +29,7 @@ func TestUnixShellFromString_Linux(t *testing.T) {
 		{"/bin/ksh", ShellKsh},
 
 		{"not_a_real_shell", ShellSh},
-		{"/usr/bin/unknown_shell_xyz", ShellBash},
+		{"/usr/bin/unknown_shell_xyz", ShellSh},
 	}
 	for _, c := range cases {
 		assert.Equalf(t, c.want, unixShellFromString(c.path), "path=%q", c.path)

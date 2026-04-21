@@ -5,6 +5,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 )
 
 func Zero[T any]() T {
@@ -42,7 +43,7 @@ func Or[T any, S ~[]T](arr S, fn func(T) bool) bool {
 }
 
 func Filter[T any, S ~[]T](arr S, fn func(T) bool) S {
-	return slices.DeleteFunc(arr, func(t T) bool {
+	return slices.DeleteFunc(slices.Clone(arr), func(t T) bool {
 		return !fn(t)
 	})
 }
@@ -98,15 +99,6 @@ func Map[S any, D any](arr []S, fn func(S) D) []D {
 	return retArr
 }
 
-func Done(ctx context.Context) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
 func Must[T any](v T, err error) T {
 	if err != nil {
 		panic(err)
@@ -119,4 +111,29 @@ func Must0[T1 any, T2 any](v1 T1, v2 T2, err error) (T1, T2) {
 		panic(err)
 	}
 	return v1, v2
+}
+
+func Done(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func emptyfn() {}
+
+func Timeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if Done(ctx) {
+		return ctx, emptyfn
+	}
+	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
+		now := time.Now()
+		// use short timeout first
+		if deadline.Before(now) || deadline.Sub(now) <= timeout {
+			return ctx, emptyfn
+		}
+	}
+	return context.WithTimeout(ctx, timeout)
 }

@@ -132,14 +132,52 @@ func TestFreeBuf_FreeMe(t *testing.T) {
 	assert.Nil(t, buf.part)
 }
 
-func TestFreeBuf_Interface(t *testing.T) {
-	buf := New(16)
+func TestFreeBuf_FreeBytes(t *testing.T) {
+	buf := New(10)
 	defer buf.FreeMe()
-	buf.Write([]byte("hello world"))
-	buf.WriteByte('!')
-	buf.WriteString("!!")
+	assert.Equal(t, 10, len(buf.FreeBytes()))
+	nn, err := buf.Write([]byte{0, 0, 0})
+	assert.Equal(t, 3, nn)
+	assert.NoError(t, err)
+	assert.Equal(t, 7, len(buf.FreeBytes()))
+	_, err = buf.ReadByte()
+	assert.NoError(t, err)
+	assert.Equal(t, 7, len(buf.FreeBytes()))
+}
 
-	out := make([]byte, 15)
-	n, _ := buf.Read(out)
-	assert.Equal(t, "hello world!!!", string(out[:n]))
+func TestFreeBuf_Bytes(t *testing.T) {
+	buf := New(10)
+	defer buf.FreeMe()
+	nn, err := buf.Write([]byte{0, 1, 2})
+	assert.Equal(t, 3, nn)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{0, 1, 2}, buf.Bytes())
+	_, err = buf.ReadByte()
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{1, 2}, buf.Bytes())
+}
+
+func TestFreeBuf_Truncated(t *testing.T) {
+	buf := New(10)
+	defer buf.FreeMe()
+	n := copy(buf.FreeBytes(), []byte{0, 1, 2})
+	assert.Equal(t, 3, n)
+	buf.Truncated(3)
+	assert.Equal(t, []byte{0, 1, 2}, buf.Bytes())
+}
+
+func TestFreeBuf_Truncated2(t *testing.T) {
+	buf := New(10)
+	defer buf.FreeMe()
+	nn, err := buf.Write([]byte{0, 1, 2})
+	assert.Equal(t, 3, nn)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{0, 1, 2}, buf.Bytes())
+	buf.Truncated(2)
+	assert.Equal(t, []byte{0, 1}, buf.Bytes())
+	_, err = buf.ReadByte()
+	assert.NoError(t, err)
+	// overflowed size
+	buf.Truncated(100)
+	assert.Equal(t, []byte{1, 2, 0, 0, 0, 0, 0, 0, 0}, buf.Bytes())
 }

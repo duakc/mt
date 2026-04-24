@@ -17,6 +17,18 @@ func New(size int) *FreeBuf {
 	return &FreeBuf{part: p}
 }
 
+func (b *FreeBuf) Bytes() []byte {
+	return b.part.data[b.part.r:b.part.w]
+}
+
+func (b *FreeBuf) Truncated(n int) {
+	b.part.truncated(n)
+}
+
+func (b *FreeBuf) FreeBytes() []byte {
+	return b.part.freeBytes()
+}
+
 func (b *FreeBuf) Read(p []byte) (n int, err error) {
 	return b.part.read(p)
 }

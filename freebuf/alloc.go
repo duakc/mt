@@ -9,6 +9,16 @@ import (
 	"github.com/duakc/mt/freebuf/internal"
 )
 
+type Simple []byte
+
+func NewSimple(size int) Simple {
+	return Simple(internal.Get(size)[:size])
+}
+
+func (s Simple) FreeMe() {
+	internal.Put(s)
+}
+
 var bytePartPool = sync.Pool{
 	New: func() any {
 		return new(bytePart)
@@ -164,6 +174,15 @@ func (h *bytePart) writeToOnce(w io.Writer) (n int, err error) {
 		err = io.ErrShortWrite
 	}
 	return n, err
+}
+
+func (h *bytePart) truncated(n int) {
+	n = min(n, len(h.data)-h.r)
+	h.w = h.r + n
+}
+
+func (h *bytePart) freeBytes() []byte {
+	return h.data[h.w:]
 }
 
 func mustWrite(what string, n int, err error) int {

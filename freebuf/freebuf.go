@@ -2,6 +2,18 @@ package freebuf
 
 import "io"
 
+type Buffer interface {
+	io.ReadWriter
+	io.StringWriter
+	io.ByteWriter
+	io.ByteReader
+	io.ReaderFrom
+	io.WriterTo
+
+	Len() int
+	FreeMe()
+}
+
 func ReadUntil(r io.Reader, buf []byte) (n int, err error) {
 	if len(buf) == 0 {
 		return 0, nil

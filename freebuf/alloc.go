@@ -1,6 +1,7 @@
 package freebuf
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -20,20 +21,15 @@ const (
 
 func alloc(size int) *bytePart {
 	bp := bytePartPool.Get().(*bytePart)
-	if size <= maxSize {
-		buffer := internal.Get(size)
-		buffer = buffer[:cap(buffer)]
-		bp.managed = true
-		bp.data = buffer
-	} else {
-		bp.managed = false
-		bp.data = make([]byte, size)
-	}
+	size = max(PartMinimalSize, size)
+	bp.data = internal.Get(size)
+	bp.w = 0
+	bp.r = 0
 	return bp
 }
 
 func free(b *bytePart) {
-	if b == nil || !b.managed || b.data == nil || len(b.data) > maxSize {
+	if b == nil || b.data == nil || len(b.data) > maxSize {
 		return
 	}
 
@@ -52,8 +48,7 @@ func freeMulti(bs []*bytePart) {
 type bytePart struct {
 	data []byte
 
-	r, w    int
-	managed bool
+	r, w int
 }
 
 func (h *bytePart) reset() {
@@ -62,16 +57,19 @@ func (h *bytePart) reset() {
 	h.w = 0
 }
 
-func (h *bytePart) write(b []byte) (int, error) {
+func (h *bytePart) write(b []byte) (n int, err error) {
 	if h.freeSpace() == 0 {
 		return 0, io.ErrShortBuffer
 	}
+	if h.len() < len(b) {
+		err = io.ErrShortBuffer
+	}
 
 	to := min(h.w+len(b), len(h.data))
-	nn := copy(h.data[h.w:to], b)
-	h.w += nn
+	n = copy(h.data[h.w:to], b)
+	h.w += n
 
-	return nn, nil
+	return n, err
 }
 
 func (h *bytePart) writeByte(b byte) error {
@@ -92,19 +90,25 @@ func (h *bytePart) readByte() (byte, error) {
 	return b, nil
 }
 
-func (h *bytePart) writeString(s string) (int, error) {
+func (h *bytePart) writeString(s string) (n int, err error) {
 	if h.freeSpace() == 0 {
 		return 0, io.ErrShortBuffer
 	}
+	if h.len() < len(s) {
+		err = io.ErrShortBuffer
+	}
 
 	to := min(h.w+len(s), len(h.data))
-	nn := copy(h.data[h.w:to], s)
-	h.w += nn
+	n = copy(h.data[h.w:to], s)
+	h.w += n
 
-	return nn, nil
+	return n, err
 }
 
 func (h *bytePart) read(b []byte) (int, error) {
+	if h.len() == 0 {
+		return 0, io.EOF
+	}
 	to := min(h.r+len(b), h.w)
 	nn := copy(b[:h.w-h.r], h.data[h.r:to])
 	h.r += nn
@@ -123,15 +127,51 @@ func (h *bytePart) freeSpace() int {
 	return len(h.data) - h.w
 }
 
+func (h *bytePart) limit(n int) {
+	if n < 0 {
+		panic("negative limit")
+	}
+	if n < h.w || n > len(h.data) {
+		panic("limit out of range")
+	}
+	h.data = h.data[:n]
+}
+
+// due the io.Reader Read() method may return another io.ErrShortBuffer
+// we need a special value to specifics the buffer is full
+var errBytePartReadFromOnceFull = errors.New("buffer full")
+
+func (h *bytePart) readFromOnce(r io.Reader) (n int, err error) {
+	if h.freeSpace() == 0 {
+		return 0, errBytePartReadFromOnceFull
+	}
+	n, err = ReadUntil(r, h.data[h.w:])
+	h.w += n
+	return n, err
+}
+
+var errBytePartWriteToOnceEmpty = errors.New("buffer empty")
+
+func (h *bytePart) writeToOnce(w io.Writer) (n int, err error) {
+	if h.len() == 0 {
+		return 0, errBytePartWriteToOnceEmpty
+	}
+	n, err = WriteUntil(w, h.data[h.r:h.w])
+	if n < h.len() && err == nil {
+		err = io.ErrShortWrite
+	}
+	return n, err
+}
+
 func mustWrite(what string, n int, err error) int {
-	if err != nil {
+	if err != nil && err != io.ErrShortBuffer {
 		panic(fmt.Sprintf("%s: written=%d: %s", what, n, err.Error()))
 	}
 	return n
 }
 
 func mustRead(what string, n int, err error) int {
-	if err != nil {
+	if err != nil && err != io.EOF {
 		panic(fmt.Sprintf("%s: read=%d: %s", what, n, err.Error()))
 	}
 	return n

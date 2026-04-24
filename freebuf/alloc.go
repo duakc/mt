@@ -58,7 +58,7 @@ func (h *bytePart) reset() {
 }
 
 func (h *bytePart) write(b []byte) (n int, err error) {
-	if h.freeSpace() == 0 {
+	if h.freeSpace() <= 0 {
 		return 0, io.ErrShortBuffer
 	}
 	if h.len() < len(b) {
@@ -73,7 +73,7 @@ func (h *bytePart) write(b []byte) (n int, err error) {
 }
 
 func (h *bytePart) writeByte(b byte) error {
-	if h.freeSpace() == 0 {
+	if h.freeSpace() <= 0 {
 		return io.ErrShortBuffer
 	}
 	h.w++
@@ -91,7 +91,7 @@ func (h *bytePart) readByte() (byte, error) {
 }
 
 func (h *bytePart) writeString(s string) (n int, err error) {
-	if h.freeSpace() == 0 {
+	if h.freeSpace() <= 0 {
 		return 0, io.ErrShortBuffer
 	}
 	if h.len() < len(s) {
@@ -124,17 +124,19 @@ func (h *bytePart) len() int {
 }
 
 func (h *bytePart) freeSpace() int {
-	return len(h.data) - h.w
+	return max(len(h.data)-h.w, 0)
 }
 
 func (h *bytePart) limit(n int) {
 	if n < 0 {
 		panic("negative limit")
 	}
-	if n < h.w || n > len(h.data) {
-		panic("limit out of range")
+	if n > len(h.data) {
+		panic("limit overflow")
 	}
 	h.data = h.data[:n]
+	h.w = min(h.w, n)
+	h.r = min(h.r, n)
 }
 
 // due the io.Reader Read() method may return another io.ErrShortBuffer
@@ -142,7 +144,7 @@ func (h *bytePart) limit(n int) {
 var errBytePartReadFromOnceFull = errors.New("buffer full")
 
 func (h *bytePart) readFromOnce(r io.Reader) (n int, err error) {
-	if h.freeSpace() == 0 {
+	if h.freeSpace() <= 0 {
 		return 0, errBytePartReadFromOnceFull
 	}
 	n, err = ReadUntil(r, h.data[h.w:])

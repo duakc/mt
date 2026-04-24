@@ -36,7 +36,7 @@ func (b *FreeBuf) ReadByte() (byte, error) {
 }
 
 func (b *FreeBuf) ReadFrom(r io.Reader) (n int64, err error) {
-	if b.part.freeSpace() == 0 {
+	if b.part.freeSpace() <= 0 {
 		return 0, io.ErrShortBuffer
 	}
 

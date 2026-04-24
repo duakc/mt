@@ -4,6 +4,8 @@ import (
 	"io"
 )
 
+var _ Buffer = (*FreeBuf)(nil)
+
 type FreeBuf struct {
 	part *bytePart
 }

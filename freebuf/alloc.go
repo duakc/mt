@@ -61,7 +61,7 @@ func (h *bytePart) write(b []byte) (n int, err error) {
 	if h.freeSpace() <= 0 {
 		return 0, io.ErrShortBuffer
 	}
-	if h.len() < len(b) {
+	if h.freeSpace() < len(b) {
 		err = io.ErrShortBuffer
 	}
 
@@ -76,8 +76,8 @@ func (h *bytePart) writeByte(b byte) error {
 	if h.freeSpace() <= 0 {
 		return io.ErrShortBuffer
 	}
-	h.w++
 	h.data[h.w] = b
+	h.w++
 	return nil
 }
 
@@ -94,7 +94,7 @@ func (h *bytePart) writeString(s string) (n int, err error) {
 	if h.freeSpace() <= 0 {
 		return 0, io.ErrShortBuffer
 	}
-	if h.len() < len(s) {
+	if h.freeSpace() < len(s) {
 		err = io.ErrShortBuffer
 	}
 
@@ -110,7 +110,7 @@ func (h *bytePart) read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 	to := min(h.r+len(b), h.w)
-	nn := copy(b[:h.w-h.r], h.data[h.r:to])
+	nn := copy(b, h.data[h.r:to])
 	h.r += nn
 	var err error
 	if nn != len(b) {
@@ -159,6 +159,7 @@ func (h *bytePart) writeToOnce(w io.Writer) (n int, err error) {
 		return 0, errBytePartWriteToOnceEmpty
 	}
 	n, err = WriteUntil(w, h.data[h.r:h.w])
+	h.r += n
 	if n < h.len() && err == nil {
 		err = io.ErrShortWrite
 	}

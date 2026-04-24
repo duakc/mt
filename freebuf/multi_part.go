@@ -6,6 +6,8 @@ import (
 	"github.com/duakc/mt/freebuf/internal"
 )
 
+var _ Buffer = (*MultiPartBuffer)(nil)
+
 type MultiPartBuffer struct {
 	parts []*bytePart
 }
@@ -135,7 +137,7 @@ func (c *MultiPartBuffer) ReadFrom(r io.Reader) (n int64, err error) {
 func (c *MultiPartBuffer) WriteTo(w io.Writer) (n int64, err error) {
 	writeBuffer := internal.Get(PartReadIncSize)
 	defer internal.Put(writeBuffer)
-	for ; len(c.parts) == 0; c.shrinkFront() {
+	for ; len(c.parts) != 0; c.shrinkFront() {
 		nn, readErr := c.Read(writeBuffer)
 		if readErr != nil && readErr != io.EOF {
 			err = readErr

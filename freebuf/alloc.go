@@ -16,6 +16,7 @@ func NewSimple(size int) Simple {
 }
 
 func (s Simple) FreeMe() {
+	clear(s)
 	internal.Put(s)
 }
 

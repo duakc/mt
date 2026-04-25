@@ -15,6 +15,7 @@ const (
 	ShellUseDefault Shell = iota
 	ShellSh
 
+	// ShellCmd ShellPowerShell windows
 	ShellCmd
 	ShellPowerShell
 
@@ -33,6 +34,8 @@ const (
 
 	ShellRksh // Restricted Korn shell
 	ShellKsh  // same as ShellRksh
+
+	shellMax
 )
 
 var unixShellList = []struct {
@@ -80,6 +83,27 @@ var unixShellList = []struct {
 		defaultShell: ShellSh,
 		platform:     gosys.IsHurd,
 	},
+}
+
+func ShellFromString(s string) (Shell, bool) {
+	if gosys.IsWindows {
+		switch s {
+		case "powershell":
+			return ShellPowerShell, true
+		case "cmd":
+			return ShellCmd, true
+		}
+		return ShellCmd, false
+	}
+	if s == "" {
+		return ShellSh, false
+	}
+	for i := Shell(1); i < shellMax; i++ {
+		if s == i.String() {
+			return i, true
+		}
+	}
+	return ShellSh, false
 }
 
 func unixShellFromString(path string) Shell {

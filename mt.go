@@ -137,3 +137,27 @@ func Timeout(ctx context.Context, timeout time.Duration) (context.Context, conte
 	}
 	return context.WithTimeout(ctx, timeout)
 }
+
+func KeyValue(e string) (key string, value string, found bool) {
+	if i := strings.IndexByte(e, '='); i >= 0 && i < len(e)-1 {
+		return e[:i], e[i+1:], true
+	}
+	return "", "", false
+}
+
+func KeyValueMulti(e string) (key string, value string, found bool) {
+	i := strings.IndexByte(e, '=')
+	if i < 0 || i == len(e)-1 {
+		return "", "", false
+	}
+
+	j := i + 1
+	for j < len(e) && e[j] == '=' {
+		j++
+	}
+	if j == len(e) {
+		return "", "", false
+	}
+
+	return e[:i], e[j:], true
+}

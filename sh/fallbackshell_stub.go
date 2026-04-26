@@ -3,4 +3,5 @@
 package sh
 
 func fallbackShell() string {
+	return ""
 }

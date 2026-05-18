@@ -122,19 +122,8 @@ func Done(ctx context.Context) bool {
 	}
 }
 
-func emptyfn() {}
-
+// Timeout Deprecated: use context.WithTimeout() is enough
 func Timeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	if Done(ctx) {
-		return ctx, emptyfn
-	}
-	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
-		now := time.Now()
-		// use short timeout first
-		if deadline.Before(now) || deadline.Sub(now) <= timeout {
-			return ctx, emptyfn
-		}
-	}
 	return context.WithTimeout(ctx, timeout)
 }
 

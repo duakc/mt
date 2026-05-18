@@ -58,10 +58,10 @@ func (c *Cmd) RunContext(ctx context.Context, command string) error {
 		runArgs []string
 		becomed bool
 	)
-
 	shell, shellArgs := ShellCommand(c.Shell)
 	runName = shell
 	runArgs = shellArgs
+
 	if suCommand, suCommandArg := BecomeCommand(c.Become); c.Become.Method != BecomeNone && suCommand != "" {
 		runArgs = append(suCommandArg, shell)
 		runArgs = append(runArgs, shellArgs...)
@@ -84,16 +84,8 @@ func (c *Cmd) RunContext(ctx context.Context, command string) error {
 		becomed = true
 	}
 
-	cc := exec.CommandContext(ctx, runName, append(runArgs, command)...)
-
-	cc.Env = append(os.Environ(), c.ExtendEnv...)
-	cc.Dir = c.WorkDir
-	cc.Stdin = c.Stdin
-	cc.Stdout = c.Stdout
-	cc.Stderr = c.Stderr
-
-	err := cc.Run()
-	c.ExecutedCmd = cc
+	c.ExecutedCmd = c.ExecCommand(ctx, runName, append(runArgs, command)...)
+	err := c.ExecutedCmd.Run()
 	if err != nil {
 		shellErr := &ShellError{ShellPath: shell, ShellArgs: shellArgs, Err: err}
 		if becomed {
@@ -102,6 +94,17 @@ func (c *Cmd) RunContext(ctx context.Context, command string) error {
 		return shellErr
 	}
 	return nil
+}
+
+func (c *Cmd) ExecCommand(ctx context.Context, command string, args ...string) *exec.Cmd {
+	cc := exec.CommandContext(ctx, command, args...)
+
+	cc.Env = append(os.Environ(), c.ExtendEnv...)
+	cc.Dir = c.WorkDir
+	cc.Stdin = c.Stdin
+	cc.Stdout = c.Stdout
+	cc.Stderr = c.Stderr
+	return cc
 }
 
 func (c *Cmd) Env(k, v string) *Cmd {

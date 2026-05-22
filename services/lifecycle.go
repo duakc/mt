@@ -6,15 +6,22 @@ import (
 	"io"
 )
 
-type StartStage int
+type Stage int
 
 const (
-	StagePreStart StartStage = iota
+	StagePreStart Stage = iota
 	StageStart
 	StagePostStart
+
+	StageClose
 )
 
-func (s StartStage) String() string {
+type LifeCycle interface {
+	Starter
+	io.Closer
+}
+
+func (s Stage) String() string {
 	switch s {
 	case StagePreStart:
 		return "PreStart"
@@ -22,43 +29,33 @@ func (s StartStage) String() string {
 		return "Start"
 	case StagePostStart:
 		return "PostStart"
+	case StageClose:
+		return "Close"
 	default:
 		return fmt.Sprintf("StartStage(%d)", s)
 	}
 }
 
 type Starter interface {
-	Start(ctx context.Context, stage StartStage) error
-}
-
-type Closer interface {
-	Close() error
+	Start(ctx context.Context, stage Stage) error
 }
 
 func Close(service any) error {
-	if c, ok := service.(Closer); ok {
-		return c.Close()
-	}
 	if c, ok := service.(io.Closer); ok {
 		return c.Close()
 	}
 	return nil
 }
 
-func Start(ctx context.Context, stage StartStage, service any) error {
+func Start(ctx context.Context, stage Stage, service any) error {
 	if s, ok := service.(Starter); ok {
 		return s.Start(ctx, stage)
 	}
 	return nil
 }
 
-type LifeCycle interface {
-	Starter
-	Closer
-}
-
 func StartService(ctx context.Context, ser any) error {
-	for _, stage := range []StartStage{StagePreStart, StageStart, StagePostStart} {
+	for _, stage := range []Stage{StagePreStart, StageStart, StagePostStart} {
 		if err := Start(ctx, stage, ser); err != nil {
 			return newServiceLifeCycleError(err, stage)
 		}
@@ -68,25 +65,25 @@ func StartService(ctx context.Context, ser any) error {
 
 func CloseService(ser any) error {
 	if err := Close(ser); err != nil {
-		return &LifeCycleError{Err: err, Stage: "Close"}
+		return &LifeCycleError{Err: err, Stage: StageClose}
 	}
 	return nil
 }
 
 type LifeCycleError struct {
 	Err   error
-	Stage string
+	Stage Stage
 }
 
-func newServiceLifeCycleError(err error, stage StartStage) error {
+func newServiceLifeCycleError(err error, stage Stage) error {
 	return &LifeCycleError{
 		Err:   err,
-		Stage: stage.String(),
+		Stage: stage,
 	}
 }
 
 func (e *LifeCycleError) Error() string {
-	return fmt.Sprintf("service stage %s: %s", e.Stage, e.Err)
+	return fmt.Sprintf("service stage %s: %s", e.Stage.String(), e.Err)
 }
 
 func (e *LifeCycleError) Unwrap() error {

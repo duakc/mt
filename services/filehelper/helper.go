@@ -17,6 +17,7 @@ type Helper interface {
 
 	MkdirAll(path string, perm os.FileMode) error
 	Path(name string) string
+	Stat(name string) (os.FileInfo, error)
 }
 
 var _ Helper = (*DefaultFileHelper)(nil)
@@ -28,6 +29,10 @@ type DefaultFileHelper struct {
 
 	closeOnce sync.Once
 	closeErr  error
+}
+
+func (h *DefaultFileHelper) Stat(name string) (os.FileInfo, error) {
+	return h.root.Stat(name)
 }
 
 func New(dir string) (*DefaultFileHelper, error) {

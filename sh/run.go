@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/duakc/mt"
 	"github.com/duakc/mt/gosys"
 )
 
@@ -99,7 +100,7 @@ func (c *Cmd) RunContext(ctx context.Context, command string) error {
 func (c *Cmd) ExecCommand(ctx context.Context, command string, args ...string) *exec.Cmd {
 	cc := exec.CommandContext(ctx, command, args...)
 
-	cc.Env = append(os.Environ(), c.ExtendEnv...)
+	cc.Env = mt.Distinct(c.ExtendEnv)
 	cc.Dir = c.WorkDir
 	cc.Stdin = c.Stdin
 	cc.Stdout = c.Stdout

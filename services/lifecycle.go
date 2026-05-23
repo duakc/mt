@@ -12,8 +12,6 @@ const (
 	StagePreStart Stage = iota
 	StageStart
 	StagePostStart
-
-	StageClose
 )
 
 type LifeCycle interface {
@@ -29,8 +27,6 @@ func (s Stage) String() string {
 		return "Start"
 	case StagePostStart:
 		return "PostStart"
-	case StageClose:
-		return "Close"
 	default:
 		return fmt.Sprintf("StartStage(%d)", s)
 	}
@@ -65,25 +61,25 @@ func StartService(ctx context.Context, ser any) error {
 
 func CloseService(ser any) error {
 	if err := Close(ser); err != nil {
-		return &LifeCycleError{Err: err, Stage: StageClose}
+		return &LifeCycleError{Err: err, Stage: "Close"}
 	}
 	return nil
 }
 
 type LifeCycleError struct {
 	Err   error
-	Stage Stage
+	Stage string
 }
 
 func newServiceLifeCycleError(err error, stage Stage) error {
 	return &LifeCycleError{
 		Err:   err,
-		Stage: stage,
+		Stage: stage.String(),
 	}
 }
 
 func (e *LifeCycleError) Error() string {
-	return fmt.Sprintf("service stage %s: %s", e.Stage.String(), e.Err)
+	return fmt.Sprintf("service stage %s: %s", e.Stage, e.Err)
 }
 
 func (e *LifeCycleError) Unwrap() error {

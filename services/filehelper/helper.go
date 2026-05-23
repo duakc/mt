@@ -41,7 +41,7 @@ func New(dir string) (*DefaultFileHelper, error) {
 }
 
 func NewMkdir(dir string) (*DefaultFileHelper, error) {
-	err := os.MkdirAll(filepath.Dir(dir), 0777)
+	err := os.MkdirAll(filepath.Dir(dir), 0o777)
 	if err != nil {
 		return nil, err
 	}
@@ -86,5 +86,5 @@ func (h *DefaultFileHelper) MkdirAll(path string, perm os.FileMode) error {
 
 func (h *DefaultFileHelper) mkdir(name string) error {
 	dir := filepath.Dir(name)
-	return h.root.MkdirAll(dir, 0777)
+	return h.root.MkdirAll(dir, 0o777)
 }

@@ -16,6 +16,7 @@ type Helper interface {
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
 
 	MkdirAll(path string, perm os.FileMode) error
+	Path(name string) string
 }
 
 var _ Helper = (*DefaultFileHelper)(nil)
@@ -30,22 +31,18 @@ type DefaultFileHelper struct {
 }
 
 func New(dir string) (*DefaultFileHelper, error) {
-	root, err := os.OpenRoot(dir)
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(absDir)
 	if err != nil {
 		return nil, err
 	}
 	return &DefaultFileHelper{
-		dir:  dir,
+		dir:  absDir,
 		root: root,
 	}, nil
-}
-
-func NewMkdir(dir string) (*DefaultFileHelper, error) {
-	err := os.MkdirAll(filepath.Dir(dir), 0o777)
-	if err != nil {
-		return nil, err
-	}
-	return New(dir)
 }
 
 func (h *DefaultFileHelper) Close() error {
@@ -77,11 +74,15 @@ func (h *DefaultFileHelper) OpenFile(name string, flag int, perm os.FileMode) (*
 			return nil, err
 		}
 	}
-	return os.OpenFile(name, flag, perm)
+	return h.root.OpenFile(name, flag, perm)
 }
 
 func (h *DefaultFileHelper) MkdirAll(path string, perm os.FileMode) error {
 	return h.root.MkdirAll(path, perm)
+}
+
+func (h *DefaultFileHelper) Path(name string) string {
+	return filepath.Join(h.dir, name)
 }
 
 func (h *DefaultFileHelper) mkdir(name string) error {

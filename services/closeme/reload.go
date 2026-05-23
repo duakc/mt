@@ -8,9 +8,7 @@ import (
 	"github.com/duakc/mt"
 )
 
-var (
-	closeResources sync.Map
-)
+var closeResources sync.Map
 
 type ManagedCloseResource interface {
 	io.Closer

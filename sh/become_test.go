@@ -1,151 +1,183 @@
-package sh
+package sh_test
 
 import (
 	"testing"
+
+	"github.com/duakc/mt/sh"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBecomeCommand_None(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeNone})
+	cmd, args := sh.BecomeCommand(sh.BecomeOption{Method: sh.BecomeNone})
 	assert.Empty(t, cmd)
 	assert.Nil(t, args)
 }
 
-// --sudo
-
-func TestBecomeCommand_Sudo_NoUserNoGroup(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseSudo})
-	assert.Equal(t, "sudo", cmd)
-	assert.Equal(t, []string{"-E"}, args)
-}
-
-func TestBecomeCommand_Sudo_UserOnly(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseSudo, User: "alice"})
-	assert.Equal(t, "sudo", cmd)
-	assert.Equal(t, []string{"-E", "-u", "alice"}, args)
-}
-
-func TestBecomeCommand_Sudo_GroupOnly(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseSudo, Group: "wheel"})
-	assert.Equal(t, "sudo", cmd)
-	assert.Equal(t, []string{"-E", "-g", "wheel"}, args)
-}
-
-func TestBecomeCommand_Sudo_UserAndGroup(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{
-		Method: BecomeUseSudo,
-		User:   "alice",
-		Group:  "admins",
-	})
-	assert.Equal(t, "sudo", cmd)
-	assert.Equal(t, []string{"-E", "-g", "admins", "-u", "alice"}, args)
-}
-
-// --su
-
-func TestBecomeCommand_Su_DefaultsToRoot(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseSu})
-	assert.Equal(t, "su", cmd)
-	assert.Contains(t, args, "root")
-	assert.Contains(t, args, "-c")
-}
-
-func TestBecomeCommand_Su_WithUser(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseSu, User: "bob"})
-	assert.Equal(t, "su", cmd)
-	assert.Contains(t, args, "bob")
-	assert.Contains(t, args, "-c")
-	assert.NotContains(t, args, "root")
-}
-
-func TestBecomeCommand_Su_WithGroup(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{
-		Method: BecomeUseSu,
-		User:   "alice",
-		Group:  "wheel",
-	})
-	assert.Equal(t, "su", cmd)
-	assert.Contains(t, args, "--group")
-	assert.Contains(t, args, "wheel")
-	assert.Contains(t, args, "alice")
-}
-
-func TestBecomeCommand_Su_PreservesEnvironmentFlag(t *testing.T) {
-	_, args := BecomeCommand(BecomeOption{Method: BecomeUseSu, User: "alice"})
-	assert.Contains(t, args, "--preserve-environment",
-		"su should always pass --preserve-environment")
-}
-
-// --doas
-
-func TestBecomeCommand_Doas_NoUser(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseDoas})
-	assert.Equal(t, "doas", cmd)
-	assert.Empty(t, args, "doas can not be pass args without user")
-}
-
-func TestBecomeCommand_Doas_WithUser(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUseDoas, User: "carol"})
-	assert.Equal(t, "doas", cmd)
-	assert.Equal(t, []string{"-u", "carol"}, args)
-}
-
-func TestBecomeCommand_Doas_GroupIsIgnored(t *testing.T) {
-	_, args := BecomeCommand(BecomeOption{
-		Method: BecomeUseDoas,
-		User:   "carol",
-		Group:  "wheel",
-	})
-	assert.NotContains(t, args, "wheel",
-		"doas doesn't support set group")
-}
-
-// --pkexec
-
-func TestBecomeCommand_Pkexec_NoUser(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUsePkexec})
-	assert.Equal(t, "pkexec", cmd)
-	assert.Equal(t, []string{"--keep-cwd"}, args)
-}
-
-func TestBecomeCommand_Pkexec_WithUser(t *testing.T) {
-	cmd, args := BecomeCommand(BecomeOption{Method: BecomeUsePkexec, User: "dave"})
-	assert.Equal(t, "pkexec", cmd)
-	assert.Equal(t, []string{"--keep-cwd", "--user", "dave"}, args)
-}
-
-func TestBecomeCommand_Pkexec_AlwaysKeepsCwd(t *testing.T) {
-	_, args := BecomeCommand(BecomeOption{Method: BecomeUsePkexec})
-	assert.Equal(t, "--keep-cwd", args[0],
-		"pkexec should start with --keep-cwd")
-}
-
-func TestDefaultBecomeMethod_IsValid(t *testing.T) {
-	m := DefaultBecomeMethod()
-	valid := []BecomeMethod{
-		BecomeNone,
-		BecomeUseSudo,
-		BecomeUseSu,
-		BecomeUseDoas,
-		BecomeUsePkexec,
+func TestBecomeCommand_Sudo(t *testing.T) {
+	cases := []struct {
+		name     string
+		opt      sh.BecomeOption
+		wantArgs []string
+	}{
+		{
+			name:     "no user no group",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseSudo},
+			wantArgs: []string{"-E"},
+		},
+		{
+			name:     "user only",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseSudo, User: "alice"},
+			wantArgs: []string{"-E", "-u", "alice"},
+		},
+		{
+			name:     "group only",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseSudo, Group: "wheel"},
+			wantArgs: []string{"-E", "-g", "wheel"},
+		},
+		{
+			name:     "user and group",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseSudo, User: "alice", Group: "admins"},
+			wantArgs: []string{"-E", "-g", "admins", "-u", "alice"},
+		},
 	}
-	assert.Contains(t, valid, m,
-		"DefaultBecomeMethod should return known BecomeMethod")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd, args := sh.BecomeCommand(tc.opt)
+			assert.Equal(t, "sudo", cmd)
+			assert.Equal(t, tc.wantArgs, args)
+		})
+	}
 }
 
-func TestDefaultBecomeMethod_IsIdempotent(t *testing.T) {
-	assert.Equal(t, DefaultBecomeMethod(), DefaultBecomeMethod())
+func TestBecomeCommand_Su(t *testing.T) {
+	cases := []struct {
+		name            string
+		opt             sh.BecomeOption
+		wantContains    []string
+		wantNotContains []string
+	}{
+		{
+			name:         "defaults to root",
+			opt:          sh.BecomeOption{Method: sh.BecomeUseSu},
+			wantContains: []string{"root", "-c"},
+		},
+		{
+			name:            "explicit user replaces root",
+			opt:             sh.BecomeOption{Method: sh.BecomeUseSu, User: "bob"},
+			wantContains:    []string{"bob", "-c"},
+			wantNotContains: []string{"root"},
+		},
+		{
+			name:         "group passes --group",
+			opt:          sh.BecomeOption{Method: sh.BecomeUseSu, User: "alice", Group: "wheel"},
+			wantContains: []string{"--group", "wheel", "alice"},
+		},
+		{
+			name:         "always preserves environment",
+			opt:          sh.BecomeOption{Method: sh.BecomeUseSu, User: "alice"},
+			wantContains: []string{"--preserve-environment"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd, args := sh.BecomeCommand(tc.opt)
+			assert.Equal(t, "su", cmd)
+			for _, want := range tc.wantContains {
+				assert.Contains(t, args, want)
+			}
+			for _, notWant := range tc.wantNotContains {
+				assert.NotContains(t, args, notWant)
+			}
+		})
+	}
 }
 
-func TestBecomeCommand_DefaultMethodResolvesToConcreteMethod(t *testing.T) {
-	// BecomeUseDefault will call DefaultBecomeMethod() and resolve a actually method.
-	// so, the DefaultBecomeMethod can not return BecomeUseDefault.
+func TestBecomeCommand_Doas(t *testing.T) {
+	cases := []struct {
+		name     string
+		opt      sh.BecomeOption
+		wantArgs []string
+	}{
+		{
+			name:     "no user has no args",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseDoas},
+			wantArgs: nil,
+		},
+		{
+			name:     "user is forwarded",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseDoas, User: "carol"},
+			wantArgs: []string{"-u", "carol"},
+		},
+		{
+			name:     "group is ignored",
+			opt:      sh.BecomeOption{Method: sh.BecomeUseDoas, User: "carol", Group: "wheel"},
+			wantArgs: []string{"-u", "carol"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd, args := sh.BecomeCommand(tc.opt)
+			assert.Equal(t, "doas", cmd)
+			if tc.wantArgs == nil {
+				assert.Empty(t, args)
+			} else {
+				assert.Equal(t, tc.wantArgs, args)
+			}
+		})
+	}
+}
 
-	cmd, _ := BecomeCommand(BecomeOption{Method: BecomeUseDefault, User: "root"})
-	if DefaultBecomeMethod() != BecomeNone {
-		// if DefaultBecomeMethod returned a Method that not is BecomeNone
-		// a non-empty cmd should returned by BecomeCommand().
+func TestBecomeCommand_Pkexec(t *testing.T) {
+	cases := []struct {
+		name     string
+		opt      sh.BecomeOption
+		wantArgs []string
+	}{
+		{
+			name:     "no user keeps cwd only",
+			opt:      sh.BecomeOption{Method: sh.BecomeUsePkexec},
+			wantArgs: []string{"--keep-cwd"},
+		},
+		{
+			name:     "user appended after --keep-cwd",
+			opt:      sh.BecomeOption{Method: sh.BecomeUsePkexec, User: "dave"},
+			wantArgs: []string{"--keep-cwd", "--user", "dave"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd, args := sh.BecomeCommand(tc.opt)
+			assert.Equal(t, "pkexec", cmd)
+			assert.Equal(t, tc.wantArgs, args)
+			assert.Equal(t, "--keep-cwd", args[0], "pkexec must always lead with --keep-cwd")
+		})
+	}
+}
+
+func TestDefaultBecomeMethod_IsKnownAndStable(t *testing.T) {
+	m := sh.DefaultBecomeMethod()
+	valid := []sh.BecomeMethod{
+		sh.BecomeNone,
+		sh.BecomeUseSudo,
+		sh.BecomeUseSu,
+		sh.BecomeUseDoas,
+		sh.BecomeUsePkexec,
+	}
+	assert.Contains(t, valid, m, "DefaultBecomeMethod should return a known BecomeMethod (and never BecomeUseDefault, which would loop)")
+	assert.Equal(t, m, sh.DefaultBecomeMethod(), "DefaultBecomeMethod should be idempotent")
+}
+
+func TestBecomeCommand_DefaultResolvesToConcreteMethod(t *testing.T) {
+	// BecomeUseDefault must resolve through DefaultBecomeMethod() to a real
+	// method; if the platform has any escalator at all the resulting cmd
+	// must be non-empty.
+	cmd, _ := sh.BecomeCommand(sh.BecomeOption{Method: sh.BecomeUseDefault, User: "root"})
+	if sh.DefaultBecomeMethod() != sh.BecomeNone {
 		assert.NotEmpty(t, cmd)
 	}
 }

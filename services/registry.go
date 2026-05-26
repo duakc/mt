@@ -6,14 +6,20 @@ import (
 	"github.com/duakc/mt"
 )
 
+type ContextInjector interface {
+	ContextInject(ctx context.Context) context.Context
+}
+
 type Registry interface {
 	Store(k, v any)
 	Load(k any) any
+
+	Seal()
 }
 
 type registryKey struct{}
 
-func LookupDefault[K comparable](ctx context.Context, dft K) K {
+func LookupDefault[K ContextInjector](ctx context.Context, dft K) K {
 	registry := RegistryFromContext(ctx)
 	if registry == nil {
 		return dft
@@ -24,11 +30,11 @@ func LookupDefault[K comparable](ctx context.Context, dft K) K {
 	return dft
 }
 
-func Lookup[K comparable](ctx context.Context) K {
+func Lookup[K ContextInjector](ctx context.Context) K {
 	return LookupDefault(ctx, mt.Zero[K]())
 }
 
-func LookupPtrDefault[K comparable](ctx context.Context, dft *K) *K {
+func LookupPtrDefault[K ContextInjector](ctx context.Context, dft *K) *K {
 	registry := RegistryFromContext(ctx)
 	if registry == nil {
 		return dft
@@ -39,18 +45,16 @@ func LookupPtrDefault[K comparable](ctx context.Context, dft *K) *K {
 	return dft
 }
 
-func LookupPtr[K comparable](ctx context.Context) *K {
+func LookupPtr[K ContextInjector](ctx context.Context) *K {
 	return LookupPtrDefault[K](ctx, nil)
 }
 
-func Store[K comparable](ctx context.Context, value K) {
-	registry := RegistryFromContext(ctx)
-	registry.Store(mt.Zero[*K](), value)
+func Store[K ContextInjector](ctx context.Context, value K) context.Context {
+	return value.ContextInject(ctx)
 }
 
-func StorePtr[K comparable](ctx context.Context, value *K) {
-	registry := RegistryFromContext(ctx)
-	registry.Store(mt.Zero[*K](), value)
+func StorePtr[K ContextInjector](ctx context.Context, value *K) context.Context {
+	return (*value).ContextInject(ctx)
 }
 
 func NewRegistry(ctx context.Context, r Registry) context.Context {
@@ -63,4 +67,14 @@ func RegistryFromContext(ctx context.Context) Registry {
 		return nil
 	}
 	return registry.(Registry)
+}
+
+func InjectMe[T ContextInjector](ctx context.Context, v T) context.Context {
+	registry := RegistryFromContext(ctx)
+	if registry == nil {
+		registry = NewDefaultRegistry()
+		ctx = context.WithValue(ctx, registryKey{}, registry)
+	}
+	registry.Store(mt.Zero[*T](), v)
+	return ctx
 }

@@ -1,91 +1,74 @@
-package sh
+package sh_test
 
 import (
 	"testing"
 
 	"github.com/duakc/mt/gosys"
+	"github.com/duakc/mt/sh"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestShellString(t *testing.T) {
 	cases := []struct {
-		shell Shell
+		shell sh.Shell
 		want  string
 	}{
-		{ShellSh, "sh"},
-		{ShellCmd, "cmd"},
-		{ShellPowerShell, "powershell"},
-		{ShellBash, "bash"},
-		{ShellZsh, "zsh"},
-		{ShellFish, "fish"},
-		{ShellDash, "dash"},
-		{ShellAsh, "ash"},
-		{ShellMksh, "mksh"},
-		{ShellCsh, "csh"},
-		{ShellTcsh, "tcsh"},
-		{ShellRksh, "rksh"},
-		{ShellKsh, "ksh"},
-		// unknown shell should fall back to sh
-		{Shell(255), "sh"},
+		{sh.ShellSh, "sh"},
+		{sh.ShellCmd, "cmd"},
+		{sh.ShellPowerShell, "powershell"},
+		{sh.ShellBash, "bash"},
+		{sh.ShellZsh, "zsh"},
+		{sh.ShellFish, "fish"},
+		{sh.ShellDash, "dash"},
+		{sh.ShellAsh, "ash"},
+		{sh.ShellMksh, "mksh"},
+		{sh.ShellCsh, "csh"},
+		{sh.ShellTcsh, "tcsh"},
+		{sh.ShellRksh, "rksh"},
+		{sh.ShellKsh, "ksh"},
+		{sh.Shell(255), "sh"}, // unknown falls back to sh
 	}
-
 	for _, c := range cases {
-		if c.shell == ShellUseDefault {
-			continue
-		}
-		assert.Equalf(t, c.want, c.shell.String(), "Shell(%d).String()", c.shell)
+		t.Run(c.want, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, c.want, c.shell.String())
+		})
 	}
 }
 
 func TestShellCommand_UnixShells(t *testing.T) {
-	cases := []struct {
-		shell    Shell
-		wantCmd  string
-		wantArgs []string
-	}{
-		{ShellSh, "sh", []string{"-c"}},
-		{ShellBash, "bash", []string{"-c"}},
-		{ShellZsh, "zsh", []string{"-c"}},
-		{ShellFish, "fish", []string{"-c"}},
-		{ShellDash, "dash", []string{"-c"}},
-		{ShellAsh, "ash", []string{"-c"}},
-		{ShellMksh, "mksh", []string{"-c"}},
-		{ShellCsh, "csh", []string{"-c"}},
-		{ShellTcsh, "tcsh", []string{"-c"}},
-		{ShellRksh, "rksh", []string{"-c"}},
-		{ShellKsh, "ksh", []string{"-c"}},
+	unixShells := []sh.Shell{
+		sh.ShellSh, sh.ShellBash, sh.ShellZsh, sh.ShellFish,
+		sh.ShellDash, sh.ShellAsh, sh.ShellMksh,
+		sh.ShellCsh, sh.ShellTcsh, sh.ShellRksh, sh.ShellKsh,
 	}
-	for _, c := range cases {
-		gotCmd, gotArgs := ShellCommand(c.shell)
-		assert.Equalf(t, c.wantCmd, gotCmd, "ShellCommand(%s) cmd", c.shell)
-		assert.Equalf(t, c.wantArgs, gotArgs, "ShellCommand(%s) args", c.shell)
+	for _, s := range unixShells {
+		t.Run(s.String(), func(t *testing.T) {
+			t.Parallel()
+			cmd, args := sh.ShellCommand(s)
+			assert.Equal(t, s.String(), cmd)
+			assert.Equal(t, []string{"-c"}, args)
+		})
 	}
-}
-
-func TestUnixShellFromString_EmptyPath(t *testing.T) {
-	assert.Equal(t, ShellSh, unixShellFromString(""))
 }
 
 func TestDefaultShell_IsValid(t *testing.T) {
-	s := DefaultShell()
-	assert.NotEqual(t, ShellUseDefault, s, "DefaultShell() can not return ShellUseDefault, caused a loop")
+	s := sh.DefaultShell()
+	assert.NotEqual(t, sh.ShellUseDefault, s, "DefaultShell() must not return ShellUseDefault — would cause a loop")
 	assert.NotEmpty(t, s.String())
+	assert.Equal(t, s, sh.DefaultShell(), "DefaultShell() must be idempotent")
 }
 
-func TestDefaultShell_IsIdempotent(t *testing.T) {
-	assert.Equal(t, DefaultShell(), DefaultShell())
-}
-
-func TestDefaultShell_PlatformRange(t *testing.T) {
-	s := DefaultShell()
+func TestDefaultShell_MatchesPlatform(t *testing.T) {
+	s := sh.DefaultShell()
 	switch {
 	case gosys.IsWindows:
-		assert.True(t, s == ShellCmd || s == ShellPowerShell)
+		assert.True(t, s == sh.ShellCmd || s == sh.ShellPowerShell)
 	case gosys.IsLinux || gosys.IsDarwin || gosys.IsFreebsd ||
 		gosys.IsOpenbsd || gosys.IsNetbsd || gosys.IsDragonfly ||
 		gosys.IsAndroid || gosys.IsHurd:
-		assert.NotEqual(t, ShellCmd, s, "ShellCmd can not be use on unix-liked system")
-		assert.NotEqual(t, ShellPowerShell, s, "ShellPowerShell can not be use on unix-liked system")
+		assert.NotEqual(t, sh.ShellCmd, s, "ShellCmd is windows-only")
+		assert.NotEqual(t, sh.ShellPowerShell, s, "ShellPowerShell is windows-only")
 	}
 }

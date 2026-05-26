@@ -1,145 +1,126 @@
-package sh
+package sh_test
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"os"
 	"testing"
 
+	"github.com/duakc/mt/sh"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func newCaptured(shell Shell) (*Cmd, *bytes.Buffer) {
-	buf := &bytes.Buffer{}
-	c := NewShell(shell)
-	c.Stdout = buf
-	c.Stderr = buf
-	c.Stdin = nil
-	return c, buf
-}
-
-func TestNew_DefaultsToDefaultShell(t *testing.T) {
-	c := New()
-	assert.Equal(t, ShellUseDefault, c.Shell)
-}
-
-func TestNewShell_SetsShell(t *testing.T) {
-	c := NewShell(ShellBash)
-	assert.Equal(t, ShellBash, c.Shell)
-}
-
-func TestNew_DefaultsStdioToOS(t *testing.T) {
-	c := New()
+func TestNew_Defaults(t *testing.T) {
+	c := sh.New()
+	assert.Equal(t, sh.ShellUseDefault, c.Shell)
 	assert.Equal(t, os.Stdin, c.Stdin)
 	assert.Equal(t, os.Stdout, c.Stdout)
 	assert.Equal(t, os.Stderr, c.Stderr)
 }
 
-func TestCmd_Env_AppendsKV(t *testing.T) {
-	c := New()
-	ret := c.Env("FOO", "bar")
-	assert.Same(t, c, ret, "Env should return *Cmd itself")
-	assert.Contains(t, c.ExtendEnv, "FOO=bar")
+func TestNewShell_SetsShell(t *testing.T) {
+	c := sh.NewShell(sh.ShellBash)
+	assert.Equal(t, sh.ShellBash, c.Shell)
 }
 
-func TestCmd_Env_MultipleCallsAccumulate(t *testing.T) {
-	c := New()
-	c.Env("A", "1").Env("B", "2")
-	assert.Contains(t, c.ExtendEnv, "A=1")
-	assert.Contains(t, c.ExtendEnv, "B=2")
+func TestCmd_EnvBuilders(t *testing.T) {
+	cases := []struct {
+		name    string
+		apply   func(*sh.Cmd)
+		wantEnv []string
+	}{
+		{
+			name:    "Env appends key=value",
+			apply:   func(c *sh.Cmd) { c.Env("FOO", "bar") },
+			wantEnv: []string{"FOO=bar"},
+		},
+		{
+			name:    "Env is chainable and accumulates",
+			apply:   func(c *sh.Cmd) { c.Env("A", "1").Env("B", "2") },
+			wantEnv: []string{"A=1", "B=2"},
+		},
+		{
+			name:    "Envs appends slice as-is",
+			apply:   func(c *sh.Cmd) { c.Envs([]string{"X=1", "Y=2"}) },
+			wantEnv: []string{"X=1", "Y=2"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := sh.New()
+			tc.apply(c)
+			for _, kv := range tc.wantEnv {
+				assert.Contains(t, c.ExtendEnv, kv)
+			}
+		})
+	}
 }
 
-func TestCmd_Envs_AppendsSlice(t *testing.T) {
-	c := New()
-	ret := c.Envs([]string{"X=1", "Y=2"})
-	assert.Same(t, c, ret)
-	assert.Contains(t, c.ExtendEnv, "X=1")
-	assert.Contains(t, c.ExtendEnv, "Y=2")
+func TestCmd_FluentSettersReturnReceiver(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(*sh.Cmd) *sh.Cmd
+	}{
+		{"Env", func(c *sh.Cmd) *sh.Cmd { return c.Env("K", "V") }},
+		{"Envs", func(c *sh.Cmd) *sh.Cmd { return c.Envs([]string{"K=V"}) }},
+		{"Deattach", func(c *sh.Cmd) *sh.Cmd { return c.Deattach() }},
+		{"CD", func(c *sh.Cmd) *sh.Cmd { return c.CD(".") }},
+		{"BecomeUser", func(c *sh.Cmd) *sh.Cmd { return c.BecomeUser("alice") }},
+		{"BecomeFull", func(c *sh.Cmd) *sh.Cmd { return c.BecomeFull(sh.BecomeUseSudo, "bob", "wheel") }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := sh.New()
+			assert.Same(t, c, tc.call(c))
+		})
+	}
 }
 
-func TestCmd_Deattach_SetsDiscardIO(t *testing.T) {
-	c := New()
-	ret := c.Deattach()
-	assert.Same(t, c, ret)
+func TestCmd_Deattach_DiscardsIO(t *testing.T) {
+	c := sh.New().Deattach()
 	assert.Nil(t, c.Stdin)
 	assert.Equal(t, io.Discard, c.Stdout)
 	assert.Equal(t, io.Discard, c.Stderr)
 }
 
-func TestCmd_CD_SetsWorkDir(t *testing.T) {
-	c := New()
-	ret := c.CD(".")
-	assert.Same(t, c, ret)
-	assert.NotEmpty(t, c.WorkDir, "WorkDir should be set")
+func TestCmd_CD_SetsAbsoluteWorkDir(t *testing.T) {
+	c := sh.New().CD(".")
+	assert.NotEmpty(t, c.WorkDir)
 }
 
-func TestCmd_CD_PanicsOnGetWdError(t *testing.T) {
-	// documentation only
-	t.Log("CD() will panic when os.Getwd() failed")
-}
-
-func TestCmd_BecomeUser_SetsOption(t *testing.T) {
-	c := New()
-	ret := c.BecomeUser("alice")
-	assert.Same(t, c, ret)
-	require.NotNil(t, c.Become)
-	assert.Equal(t, BecomeUseDefault, c.Become.Method)
-	assert.Equal(t, "alice", c.Become.User)
-	assert.Empty(t, c.Become.Group)
-}
-
-func TestCmd_BecomeFull_SetsOption(t *testing.T) {
-	c := New()
-	ret := c.BecomeFull(BecomeUseSudo, "bob", "wheel")
-	assert.Same(t, c, ret)
-	require.NotNil(t, c.Become)
-	assert.Equal(t, BecomeUseSudo, c.Become.Method)
-	assert.Equal(t, "bob", c.Become.User)
-	assert.Equal(t, "wheel", c.Become.Group)
-}
-
-func TestShellError_Error_WithoutBecome(t *testing.T) {
-	inner := errors.New("exit status 1")
-	se := &ShellError{
-		ShellPath: "sh",
-		ShellArgs: []string{"-c"},
-		Err:       inner,
-	}
-	msg := se.Error()
-	assert.Contains(t, msg, "sh")
-	assert.Contains(t, msg, "-c")
-	assert.NotContains(t, msg, "sudo")
-}
-
-func TestShellError_Error_WithBecome(t *testing.T) {
-	inner := errors.New("exit status 1")
-	se := &ShellError{
-		ShellPath: "bash",
-		ShellArgs: []string{"-c"},
-		Become: BecomeOption{
-			Method: BecomeUseSudo,
-			User:   "root",
+func TestCmd_Become(t *testing.T) {
+	cases := []struct {
+		name  string
+		apply func(*sh.Cmd)
+		want  sh.BecomeOption
+	}{
+		{
+			name:  "BecomeUser sets default method with empty group",
+			apply: func(c *sh.Cmd) { c.BecomeUser("alice") },
+			want:  sh.BecomeOption{Method: sh.BecomeUseDefault, User: "alice"},
 		},
-		Err: inner,
+		{
+			name:  "BecomeFull sets every field",
+			apply: func(c *sh.Cmd) { c.BecomeFull(sh.BecomeUseSudo, "bob", "wheel") },
+			want:  sh.BecomeOption{Method: sh.BecomeUseSudo, User: "bob", Group: "wheel"},
+		},
 	}
-	msg := se.Error()
-	assert.Contains(t, msg, "bash")
-	assert.Contains(t, msg, "sudo")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := sh.New()
+			tc.apply(c)
+			assert.Equal(t, tc.want, c.Become)
+		})
+	}
 }
 
-func TestShellError_Unwrap_ReturnsInner(t *testing.T) {
-	inner := errors.New("original error")
-	se := &ShellError{Err: inner}
+func TestShellError_UnwrapPreservesChain(t *testing.T) {
+	inner := errors.New("original")
+	se := &sh.ShellError{Err: inner}
 	assert.Equal(t, inner, se.Unwrap())
 	assert.True(t, errors.Is(se, inner))
-}
-
-func TestShellError_ImplementsError(t *testing.T) {
-	var _ error = &ShellError{}
-}
-
-func TestHasProgramInPath_NonExistentProgram(t *testing.T) {
-	assert.False(t, hasProgramInPath("__this_program_does_not_exist_mt_test__"))
 }

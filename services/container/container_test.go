@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/duakc/mt/debug"
 	"github.com/duakc/mt/services/container"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,19 @@ func TestStorePtrLoadPtr_SharesUnderlying(t *testing.T) {
 	require.True(t, ok)
 	*p = 99
 	assert.Equal(t, 99, x)
+}
+
+func TestReset_ClearsEntries(t *testing.T) {
+	c := container.NewContainer()
+	container.Store(c, "a", 1)
+	container.Store(c, "b", 2)
+
+	c.Reset()
+
+	_, okA := container.Load[int](c, "a")
+	_, okB := container.Load[int](c, "b")
+	assert.False(t, okA)
+	assert.False(t, okB)
 }
 
 func TestLoad_Absent(t *testing.T) {
@@ -90,27 +104,38 @@ func TestLoad_WrongTypePanics(t *testing.T) {
 }
 
 func TestContextRoundTrip(t *testing.T) {
-	ctx := container.StoreContext(context.Background(), "db", "conn")
+	// Library never auto-creates a Container — attach one explicitly via a Provider.
+	p := container.NewDefaultProvider()
+	ctx := p.New(context.Background())
+
+	container.StoreContext(ctx, "db", "conn")
 
 	v, ok := container.LoadContext[string](ctx, "db")
 	require.True(t, ok)
 	assert.Equal(t, "conn", v)
 }
 
-func TestLoadContext_NoContainer(t *testing.T) {
+func TestContextHelpers_NoContainer(t *testing.T) {
+	// In production builds (debug.Enabled == false) the helpers must silently
+	// no-op when no Container is attached. The debug-panic path is tested
+	// separately below, guarded by a build tag.
+	if debug.Enabled {
+		t.Skip("silent no-op path is meaningful only without -tags=debug")
+	}
+
 	cases := []struct {
 		name string
 		run  func() (any, bool)
 	}{
 		{
-			name: "value lookup",
+			name: "LoadContext returns zero",
 			run: func() (any, bool) {
 				v, ok := container.LoadContext[int](context.Background(), "x")
 				return v, ok
 			},
 		},
 		{
-			name: "pointer lookup",
+			name: "LoadPtrContext returns nil",
 			run: func() (any, bool) {
 				v, ok := container.LoadPtrContext[int](context.Background(), "x")
 				return v, ok
@@ -125,26 +150,23 @@ func TestLoadContext_NoContainer(t *testing.T) {
 			assert.Zero(t, v)
 		})
 	}
+
+	// Stores against a bare context should also silently disappear, not panic.
+	assert.NotPanics(t, func() {
+		container.StoreContext(context.Background(), "k", 1)
+		x := 1
+		container.StorePtrContext(context.Background(), "p", &x)
+	})
 }
 
-func TestWithContext_ReusesExistingContainer(t *testing.T) {
-	ctx := container.WithContext(context.Background())
-	c1, _ := container.FromContext(ctx)
+func TestLoadContext_WrongTypePanics(t *testing.T) {
+	p := container.NewDefaultProvider()
+	ctx := p.New(context.Background())
+	container.StoreContext(ctx, "k", "string-value")
 
-	ctx = container.WithContext(ctx)
-	c2, _ := container.FromContext(ctx)
-
-	assert.Same(t, c1, c2)
-}
-
-func TestStoreContext_ReusesExistingContainer(t *testing.T) {
-	ctx := container.WithContext(context.Background())
-	c1, _ := container.FromContext(ctx)
-
-	ctx = container.StoreContext(ctx, "k", 1)
-	c2, _ := container.FromContext(ctx)
-
-	assert.Same(t, c1, c2)
+	assert.Panics(t, func() {
+		container.LoadContext[int](ctx, "k")
+	})
 }
 
 func TestContainer_ConcurrentReadWrite(t *testing.T) {

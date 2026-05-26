@@ -5,11 +5,13 @@ import (
 	"sync"
 
 	"github.com/duakc/mt"
+	"github.com/duakc/mt/debug"
 )
 
 type Container interface {
 	Load(k string) (any, bool)
 	Store(k string, v any)
+	Reset()
 }
 
 type defaultContainer struct {
@@ -26,6 +28,10 @@ func (c *defaultContainer) Load(k string) (any, bool) {
 
 func (c *defaultContainer) Store(k string, v any) {
 	c.m.Store(k, v)
+}
+
+func (c *defaultContainer) Reset() {
+	c.m.Clear()
 }
 
 func Store[T any](c Container, k string, v T) {
@@ -54,13 +60,6 @@ func LoadPtr[T any](c Container, k string) (*T, bool) {
 
 type containerKey struct{}
 
-func WithContext(ctx context.Context) context.Context {
-	if _, ok := FromContext(ctx); ok {
-		return ctx
-	}
-	return context.WithValue(ctx, containerKey{}, NewContainer())
-}
-
 func FromContext(ctx context.Context) (Container, bool) {
 	c, ok := ctx.Value(containerKey{}).(Container)
 	if !ok {
@@ -69,37 +68,40 @@ func FromContext(ctx context.Context) (Container, bool) {
 	return c, true
 }
 
-func StoreContext[T any](ctx context.Context, k string, v T) context.Context {
+func mustContainer(ctx context.Context) Container {
 	c, ok := FromContext(ctx)
-	if !ok {
-		ctx = WithContext(ctx)
-		c, _ = FromContext(ctx)
+	if ok {
+		return c
 	}
-	Store(c, k, v)
-	return ctx
+	if debug.Enabled {
+		panic("container: no Container on context — call Provider.New(ctx) before Store/Load helpers")
+	}
+	return nil
 }
 
-func StorePtrContext[T any](ctx context.Context, k string, v *T) context.Context {
-	c, ok := FromContext(ctx)
-	if !ok {
-		ctx = WithContext(ctx)
-		c, _ = FromContext(ctx)
+func StoreContext[T any](ctx context.Context, k string, v T) {
+	if c := mustContainer(ctx); c != nil {
+		Store(c, k, v)
 	}
-	StorePtr(c, k, v)
-	return ctx
+}
+
+func StorePtrContext[T any](ctx context.Context, k string, v *T) {
+	if c := mustContainer(ctx); c != nil {
+		StorePtr(c, k, v)
+	}
 }
 
 func LoadContext[T any](ctx context.Context, k string) (T, bool) {
-	c, ok := FromContext(ctx)
-	if !ok {
+	c := mustContainer(ctx)
+	if c == nil {
 		return mt.Zero[T](), false
 	}
 	return Load[T](c, k)
 }
 
 func LoadPtrContext[T any](ctx context.Context, k string) (*T, bool) {
-	c, ok := FromContext(ctx)
-	if !ok {
+	c := mustContainer(ctx)
+	if c == nil {
 		return nil, false
 	}
 	return LoadPtr[T](c, k)

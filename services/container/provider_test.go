@@ -12,7 +12,7 @@ import (
 )
 
 func TestProvider_NewAttachesContainer(t *testing.T) {
-	var p container.Provider = &container.DefaultProvider{}
+	var p container.Provider = container.NewDefaultProvider()
 
 	ctx := p.New(context.Background())
 	_, ok := container.FromContext(ctx)
@@ -20,7 +20,7 @@ func TestProvider_NewAttachesContainer(t *testing.T) {
 }
 
 func TestProvider_NewIsIdempotent(t *testing.T) {
-	var p container.Provider = &container.DefaultProvider{}
+	var p container.Provider = container.NewDefaultProvider()
 
 	ctx := p.New(context.Background())
 	c1, _ := container.FromContext(ctx)
@@ -32,7 +32,7 @@ func TestProvider_NewIsIdempotent(t *testing.T) {
 }
 
 func TestProvider_ContextInjectRegistersIntoServices(t *testing.T) {
-	p := &container.DefaultProvider{}
+	p := container.NewDefaultProvider()
 	ctx := p.ContextInject(context.Background())
 
 	got := services.Lookup[container.Provider](ctx)
@@ -40,18 +40,64 @@ func TestProvider_ContextInjectRegistersIntoServices(t *testing.T) {
 	assert.Same(t, p, got)
 }
 
+func TestNewProvider_UsesCustomFactory(t *testing.T) {
+	calls := 0
+	factory := container.FuncFactory(func() container.Container {
+		calls++
+		c := container.NewContainer()
+		container.Store(c, "factory-seeded", true)
+		return c
+	})
+
+	p := container.NewProvider(factory)
+	ctx := p.New(context.Background())
+
+	v, ok := container.LoadContext[bool](ctx, "factory-seeded")
+	require.True(t, ok)
+	assert.True(t, v)
+	assert.Equal(t, 1, calls, "factory should be invoked exactly once on first New")
+}
+
+func TestNewProvider_NilFactoryFallsBackToDefault(t *testing.T) {
+	p := container.NewProvider(nil)
+	ctx := p.New(context.Background())
+
+	_, ok := container.FromContext(ctx)
+	assert.True(t, ok)
+}
+
+func TestProvider_ReleaseResetsAndPools(t *testing.T) {
+	p := container.NewDefaultProvider()
+
+	ctx := p.New(context.Background())
+	c, _ := container.FromContext(ctx)
+	container.Store(c, "k", "v")
+
+	p.Release(ctx)
+
+	// The container we just released should be reset; we can probe it
+	// directly because we still hold the reference.
+	_, ok := container.Load[string](c, "k")
+	assert.False(t, ok, "Release must clear container entries before pooling")
+}
+
+func TestProvider_ReleaseOnBareContextIsNoop(t *testing.T) {
+	p := container.NewDefaultProvider()
+	assert.NotPanics(t, func() {
+		p.Release(context.Background())
+	})
+}
+
 func TestDefaultProvider_EndToEnd(t *testing.T) {
-	p := &container.DefaultProvider{}
+	p := container.NewDefaultProvider()
 	ctx := p.ContextInject(context.Background())
 
-	resolved := services.Lookup[*container.DefaultProvider](ctx)
+	resolved := services.Lookup[container.Provider](ctx)
 	ctx = resolved.New(ctx)
+	defer resolved.Release(ctx)
 
-	c, ok := container.FromContext(ctx)
-	require.True(t, ok)
-
-	container.Store(c, "tracer", "noop")
-	v, ok := container.Load[string](c, "tracer")
+	container.StoreContext(ctx, "tracer", "noop")
+	v, ok := container.LoadContext[string](ctx, "tracer")
 	require.True(t, ok)
 	assert.Equal(t, "noop", v)
 }

@@ -1,14 +1,18 @@
 package filehelper
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/duakc/mt/services"
 )
 
 type Helper interface {
 	io.Closer
+	services.ContextInjector
 
 	Root() *os.Root
 	Create(name string) (*os.File, error)
@@ -29,6 +33,10 @@ type DefaultFileHelper struct {
 
 	closeOnce sync.Once
 	closeErr  error
+}
+
+func (h *DefaultFileHelper) ContextInject(ctx context.Context) context.Context {
+	return services.InjectMe[Helper](ctx, h)
 }
 
 func (h *DefaultFileHelper) Stat(name string) (os.FileInfo, error) {

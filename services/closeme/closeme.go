@@ -1,10 +1,13 @@
 package closeme
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
 	"sync/atomic"
+
+	"github.com/duakc/mt/services"
 )
 
 // Manager collects resources and closes them all at once.
@@ -16,6 +19,8 @@ import (
 // the same pointer via different methods will overwrite the
 // previous entry.
 type Manager interface {
+	services.ContextInjector
+
 	store(key any, closer io.Closer)
 	storeStop(key any, stopper StopCloser)
 
@@ -29,31 +34,37 @@ type StopCloser interface {
 	Stop() error
 }
 
+var _ Manager = (*DefaultManager)(nil)
+
 // NewManager creates a new Manager.
 func NewManager() Manager {
-	return &defaultManager{}
+	return &DefaultManager{}
 }
 
-type defaultManager struct {
+type DefaultManager struct {
 	m      sync.Map
 	closed atomic.Bool
 }
 
-func (m *defaultManager) store(key any, closer io.Closer) {
+func (m *DefaultManager) ContextInject(ctx context.Context) context.Context {
+	return services.InjectMe[Manager](ctx, m)
+}
+
+func (m *DefaultManager) store(key any, closer io.Closer) {
 	if m.closed.Load() {
 		return
 	}
 	m.m.Store(key, closer)
 }
 
-func (m *defaultManager) storeStop(key any, stopper StopCloser) {
+func (m *DefaultManager) storeStop(key any, stopper StopCloser) {
 	if m.closed.Load() {
 		return
 	}
 	m.m.Store(key, stopper)
 }
 
-func (m *defaultManager) Close() error {
+func (m *DefaultManager) Close() error {
 	m.closed.Store(true)
 
 	var err error

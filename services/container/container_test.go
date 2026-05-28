@@ -3,6 +3,7 @@ package container_test
 import (
 	"context"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/duakc/mt/debug"
@@ -32,17 +33,67 @@ func TestStorePtrLoadPtr_SharesUnderlying(t *testing.T) {
 	assert.Equal(t, 99, x)
 }
 
-func TestReset_ClearsEntries(t *testing.T) {
+func TestRelease_ClearsEntries(t *testing.T) {
 	c := container.NewContainer()
 	container.Store(c, "a", 1)
 	container.Store(c, "b", 2)
 
-	c.Reset()
+	require.True(t, c.Release(), "Release should clear when refcount is zero")
 
 	_, okA := container.Load[int](c, "a")
 	_, okB := container.Load[int](c, "b")
 	assert.False(t, okA)
 	assert.False(t, okB)
+}
+
+func TestRelease_BlockedByOutstandingRef(t *testing.T) {
+	c := container.NewContainer()
+	container.Store(c, "k", "v")
+
+	c.IncRef()
+
+	assert.False(t, c.Release(), "Release must return false while refs are outstanding")
+
+	v, ok := container.Load[string](c, "k")
+	require.True(t, ok, "entries must be preserved while refs are outstanding")
+	assert.Equal(t, "v", v)
+}
+
+func TestRelease_SucceedsAfterBalancedIncDec(t *testing.T) {
+	c := container.NewContainer()
+	container.Store(c, "k", "v")
+
+	c.IncRef()
+	c.IncRef()
+
+	assert.False(t, c.Release(), "two outstanding refs — Release blocked")
+
+	c.DecRef()
+	assert.False(t, c.Release(), "one outstanding ref — Release still blocked")
+
+	c.DecRef()
+	assert.True(t, c.Release(), "refs balanced to zero — Release should succeed")
+
+	_, ok := container.Load[string](c, "k")
+	assert.False(t, ok, "entries should be cleared once Release succeeds")
+}
+
+func TestIncDecRef_Concurrent(t *testing.T) {
+	c := container.NewContainer()
+
+	const goroutines = 64
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			c.IncRef()
+			c.DecRef()
+		}()
+	}
+	wg.Wait()
+
+	assert.True(t, c.Release(), "after balanced concurrent Inc/Dec, refcount should be zero")
 }
 
 func TestLoad_Absent(t *testing.T) {
@@ -106,7 +157,7 @@ func TestLoad_WrongTypePanics(t *testing.T) {
 func TestContextRoundTrip(t *testing.T) {
 	// Library never auto-creates a Container — attach one explicitly via a Provider.
 	p := container.NewDefaultProvider()
-	ctx := p.New(context.Background())
+	ctx, _ := p.New(context.Background())
 
 	container.StoreContext(ctx, "db", "conn")
 
@@ -161,7 +212,7 @@ func TestContextHelpers_NoContainer(t *testing.T) {
 
 func TestLoadContext_WrongTypePanics(t *testing.T) {
 	p := container.NewDefaultProvider()
-	ctx := p.New(context.Background())
+	ctx, _ := p.New(context.Background())
 	container.StoreContext(ctx, "k", "string-value")
 
 	assert.Panics(t, func() {

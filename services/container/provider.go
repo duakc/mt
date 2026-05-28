@@ -10,8 +10,9 @@ import (
 type Provider interface {
 	services.ContextInjector
 
-	New(ctx context.Context) context.Context
-	Release(ctx context.Context)
+	New(ctx context.Context) (context.Context, Container)
+	ReleaseContext(ctx context.Context)
+	Release(container Container)
 }
 
 type Factory interface {
@@ -49,16 +50,23 @@ func NewProvider(factory Factory) *DefaultProvider {
 	return p
 }
 
-func (p *DefaultProvider) New(ctx context.Context) context.Context {
-	if _, ok := FromContext(ctx); ok {
-		return ctx
+func (p *DefaultProvider) New(ctx context.Context) (context.Context, Container) {
+	if c, ok := FromContext(ctx); ok {
+		return ctx, c
 	}
-	return context.WithValue(ctx, containerKey{}, p.pool.Get())
+	c := p.pool.Get()
+	return context.WithValue(ctx, containerKey{}, c), c
 }
 
-func (p *DefaultProvider) Release(ctx context.Context) {
+func (p *DefaultProvider) Release(c Container) {
+	if c.Release() {
+		p.pool.Put(c)
+	}
+}
+
+func (p *DefaultProvider) ReleaseContext(ctx context.Context) {
 	c, ok := FromContext(ctx)
-	if !ok && !c.Release() {
+	if !ok || !c.Release() {
 		return
 	}
 

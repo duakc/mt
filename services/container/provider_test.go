@@ -14,19 +14,19 @@ import (
 func TestProvider_NewAttachesContainer(t *testing.T) {
 	var p container.Provider = container.NewDefaultProvider()
 
-	ctx := p.New(context.Background())
-	_, ok := container.FromContext(ctx)
+	ctx, c := p.New(context.Background())
+	got, ok := container.FromContext(ctx)
 	assert.True(t, ok)
+	assert.Same(t, c, got)
 }
 
 func TestProvider_NewIsIdempotent(t *testing.T) {
 	var p container.Provider = container.NewDefaultProvider()
 
-	ctx := p.New(context.Background())
-	c1, _ := container.FromContext(ctx)
+	ctx, c1 := p.New(context.Background())
 
-	ctx = p.New(ctx)
-	c2, _ := container.FromContext(ctx)
+	ctx, c2 := p.New(ctx)
+	_ = ctx
 
 	assert.Same(t, c1, c2)
 }
@@ -50,7 +50,7 @@ func TestNewProvider_UsesCustomFactory(t *testing.T) {
 	})
 
 	p := container.NewProvider(factory)
-	ctx := p.New(context.Background())
+	ctx, _ := p.New(context.Background())
 
 	v, ok := container.LoadContext[bool](ctx, "factory-seeded")
 	require.True(t, ok)
@@ -60,7 +60,7 @@ func TestNewProvider_UsesCustomFactory(t *testing.T) {
 
 func TestNewProvider_NilFactoryFallsBackToDefault(t *testing.T) {
 	p := container.NewProvider(nil)
-	ctx := p.New(context.Background())
+	ctx, _ := p.New(context.Background())
 
 	_, ok := container.FromContext(ctx)
 	assert.True(t, ok)
@@ -69,11 +69,10 @@ func TestNewProvider_NilFactoryFallsBackToDefault(t *testing.T) {
 func TestProvider_ReleaseResetsAndPools(t *testing.T) {
 	p := container.NewDefaultProvider()
 
-	ctx := p.New(context.Background())
-	c, _ := container.FromContext(ctx)
+	ctx, c := p.New(context.Background())
 	container.Store(c, "k", "v")
 
-	p.Release(ctx)
+	p.ReleaseContext(ctx)
 
 	// The container we just released should be reset; we can probe it
 	// directly because we still hold the reference.
@@ -84,8 +83,41 @@ func TestProvider_ReleaseResetsAndPools(t *testing.T) {
 func TestProvider_ReleaseOnBareContextIsNoop(t *testing.T) {
 	p := container.NewDefaultProvider()
 	assert.NotPanics(t, func() {
-		p.Release(context.Background())
+		p.ReleaseContext(context.Background())
 	})
+}
+
+func TestProvider_ReleaseContextBlockedByRef(t *testing.T) {
+	p := container.NewDefaultProvider()
+
+	ctx, c := p.New(context.Background())
+	container.Store(c, "k", "v")
+	c.IncRef()
+
+	p.ReleaseContext(ctx)
+
+	v, ok := container.Load[string](c, "k")
+	require.True(t, ok, "entries must survive ReleaseContext while a ref is outstanding")
+	assert.Equal(t, "v", v)
+
+	c.DecRef()
+	p.ReleaseContext(ctx)
+	_, ok = container.Load[string](c, "k")
+	assert.False(t, ok, "after the last DecRef, ReleaseContext must clear entries")
+}
+
+func TestProvider_ReleaseBlockedByRef(t *testing.T) {
+	p := container.NewDefaultProvider()
+
+	_, c := p.New(context.Background())
+	container.Store(c, "k", "v")
+	c.IncRef()
+
+	p.Release(c)
+
+	v, ok := container.Load[string](c, "k")
+	require.True(t, ok, "entries must survive Release while a ref is outstanding")
+	assert.Equal(t, "v", v)
 }
 
 func TestDefaultProvider_EndToEnd(t *testing.T) {
@@ -93,8 +125,8 @@ func TestDefaultProvider_EndToEnd(t *testing.T) {
 	ctx := p.ContextInject(context.Background())
 
 	resolved := services.Lookup[container.Provider](ctx)
-	ctx = resolved.New(ctx)
-	defer resolved.Release(ctx)
+	ctx, _ = resolved.New(ctx)
+	defer resolved.ReleaseContext(ctx)
 
 	container.StoreContext(ctx, "tracer", "noop")
 	v, ok := container.LoadContext[string](ctx, "tracer")

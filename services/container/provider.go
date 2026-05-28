@@ -58,10 +58,10 @@ func (p *DefaultProvider) New(ctx context.Context) context.Context {
 
 func (p *DefaultProvider) Release(ctx context.Context) {
 	c, ok := FromContext(ctx)
-	if !ok {
+	if !ok && !c.Release() {
 		return
 	}
-	c.Reset()
+
 	p.pool.Put(c)
 }
 

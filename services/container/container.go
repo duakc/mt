@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/duakc/mt"
 	"github.com/duakc/mt/debug"
@@ -11,15 +12,40 @@ import (
 type Container interface {
 	Load(k string) (any, bool)
 	Store(k string, v any)
-	Reset()
+
+	IncRef()
+	DecRef()
+
+	Release() bool
 }
+
+var _ Container = (*defaultContainer)(nil)
 
 type defaultContainer struct {
 	m sync.Map
+
+	ref atomic.Int32
+}
+
+func (c *defaultContainer) Release() bool {
+	if c.ref.Load() == 0 {
+		// reset
+		c.m.Clear()
+		return true
+	}
+	return false
 }
 
 func NewContainer() Container {
 	return &defaultContainer{}
+}
+
+func (c *defaultContainer) IncRef() {
+	c.ref.Add(1)
+}
+
+func (c *defaultContainer) DecRef() {
+	c.ref.Add(-1)
 }
 
 func (c *defaultContainer) Load(k string) (any, bool) {
@@ -28,10 +54,6 @@ func (c *defaultContainer) Load(k string) (any, bool) {
 
 func (c *defaultContainer) Store(k string, v any) {
 	c.m.Store(k, v)
-}
-
-func (c *defaultContainer) Reset() {
-	c.m.Clear()
 }
 
 func Store[T any](c Container, k string, v T) {

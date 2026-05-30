@@ -24,7 +24,7 @@ type RFC3986Query struct {
 // Parameters are sorted by key, and each key-value pair is joined with '&'.
 // If there are no parameters, an empty string is returned.
 func (q *RFC3986Query) Encode() string {
-	if q.Values == nil || len(q.Values) == 0 {
+	if len(q.Values) == 0 {
 		return ""
 	}
 
@@ -53,7 +53,7 @@ func (q *RFC3986Query) Encode() string {
 //     RFC 3986 requires "~" to be left as-is.
 func encodeComponent(s string) string {
 	encoded := urlpkg.QueryEscape(s)
-	encoded = strings.Replace(encoded, "+", "%20", -1)
-	encoded = strings.Replace(encoded, "%7E", "~", -1)
+	encoded = strings.ReplaceAll(encoded, "+", "%20")
+	encoded = strings.ReplaceAll(encoded, "%7E", "~")
 	return encoded
 }

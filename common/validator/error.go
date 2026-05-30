@@ -3,26 +3,20 @@ package validator
 import "fmt"
 
 type ValidError struct {
-	err error
-
-	msg  string
-	args []any
+	Field string
+	Value any
+	err   error
 }
 
-func NewValidError(err error, msg string, args ...interface{}) *ValidError {
-	return &ValidError{
-		err:  err,
-		msg:  msg,
-		args: args,
-	}
+func NewValidError(field string, value any, err error) *ValidError {
+	return &ValidError{Field: field, Value: value, err: err}
 }
 
 func (v *ValidError) Error() string {
 	if v == nil || v.err == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("%s: %s", fmt.Sprintf(v.msg, v.args),
-		v.err.Error())
+	return fmt.Sprintf("%s: %s", v.Field, v.err.Error())
 }
 
 func (v *ValidError) Unwrap() error {

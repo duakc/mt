@@ -10,8 +10,6 @@ import (
 
 type GenericValidFunc[T any] func(T) error
 
-var _ GenericValidator[int] = (*DefaultGenericValidator[int])(nil)
-
 type DefaultGenericValidator[T any] struct {
 	fn  GenericValidFunc[T]
 	err error
@@ -23,8 +21,7 @@ func (v *DefaultGenericValidator[T]) Err() error {
 
 func (v *DefaultGenericValidator[T]) Validf(t T, format string, args ...any) bool {
 	if err := v.fn(t); err != nil {
-		v.err = errors.Join(v.err,
-			fmt.Errorf("%s: %s", fmt.Sprintf(format, args), err.Error()))
+		v.err = errors.Join(v.err, NewValidError(err, format, args...))
 		return false
 	}
 
@@ -33,8 +30,7 @@ func (v *DefaultGenericValidator[T]) Validf(t T, format string, args ...any) boo
 
 func (v *DefaultGenericValidator[T]) Valid(t T, msg string) bool {
 	if err := v.fn(t); err != nil {
-		v.err = errors.Join(v.err,
-			fmt.Errorf("%s: %s", msg, err.Error()))
+		v.err = errors.Join(v.err, NewValidError(err, msg))
 	}
 
 	return v.err == nil

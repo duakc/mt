@@ -2,7 +2,6 @@ package xtypes
 
 import (
 	urlpkg "net/url"
-	"path"
 	"sort"
 	"strings"
 )
@@ -53,7 +52,11 @@ func (q *RFC3986Query) Encode() string {
 	var parts []string
 	for _, k := range keys {
 		for _, v := range q.Values[k] {
-			parts = append(parts, encodeComponent(k)+"="+encodeComponent(v))
+			var b strings.Builder
+			b.WriteString(encodeComponent(k))
+			b.WriteByte('=')
+			b.WriteString(encodeComponent(v))
+			parts = append(parts, b.String())
 		}
 	}
 	return strings.Join(parts, "&")
@@ -101,5 +104,5 @@ func (p RFC3986Path) Encode() string {
 	for i, seg := range segments {
 		segments[i] = encodeComponent(seg)
 	}
-	return path.Join(segments...)
+	return strings.Join(segments, "/")
 }

@@ -1,6 +1,9 @@
 package xtypes
 
-import "strings"
+import (
+	"io"
+	"strings"
+)
 
 type Joined[T any] struct {
 	Array []T
@@ -8,6 +11,7 @@ type Joined[T any] struct {
 }
 
 func NewJoinedString(array []string, sep string) Joined[string] {
+	io.Pipe()
 	return Joined[string]{
 		Array: array,
 		Join:  strings.Join(array, sep),

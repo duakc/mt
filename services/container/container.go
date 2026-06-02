@@ -12,6 +12,7 @@ import (
 type Container interface {
 	Load(k string) (any, bool)
 	Store(k string, v any)
+	Delete(k string)
 
 	IncRef()
 	DecRef()
@@ -54,6 +55,10 @@ func (c *defaultContainer) Load(k string) (any, bool) {
 
 func (c *defaultContainer) Store(k string, v any) {
 	c.m.Store(k, v)
+}
+
+func (c *defaultContainer) Delete(k string) {
+	c.m.Delete(k)
 }
 
 func Store[T any](c Container, k string, v T) {

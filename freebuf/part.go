@@ -2,7 +2,6 @@ package freebuf
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 
@@ -16,7 +15,6 @@ func NewSimple(size int) Simple {
 }
 
 func (s Simple) FreeMe() {
-	clear(s)
 	internal.Put(s)
 }
 
@@ -50,12 +48,6 @@ func free(b *bytePart) {
 	bytePartPool.Put(b)
 }
 
-func freeMulti(bs []*bytePart) {
-	for i := 0; i < len(bs); i++ {
-		free(bs[i])
-	}
-}
-
 type bytePart struct {
 	data []byte
 
@@ -63,7 +55,6 @@ type bytePart struct {
 }
 
 func (h *bytePart) reset() {
-	clear(h.data)
 	h.r = 0
 	h.w = 0
 }
@@ -138,18 +129,6 @@ func (h *bytePart) freeSpace() int {
 	return max(len(h.data)-h.w, 0)
 }
 
-func (h *bytePart) limit(n int) {
-	if n < 0 {
-		panic("negative limit")
-	}
-	if n > len(h.data) {
-		panic("limit overflow")
-	}
-	h.data = h.data[:n]
-	h.w = min(h.w, n)
-	h.r = min(h.r, n)
-}
-
 // due the io.Reader Read() method may return another io.ErrShortBuffer
 // we need a special value to specifics the buffer is full
 var errBytePartReadFromOnceFull = errors.New("buffer full")
@@ -175,27 +154,4 @@ func (h *bytePart) writeToOnce(w io.Writer) (n int, err error) {
 		err = io.ErrShortWrite
 	}
 	return n, err
-}
-
-func (h *bytePart) truncated(n int) {
-	n = min(n, len(h.data)-h.r)
-	h.w = h.r + n
-}
-
-func (h *bytePart) freeBytes() []byte {
-	return h.data[h.w:]
-}
-
-func mustWrite(what string, n int, err error) int {
-	if err != nil && err != io.ErrShortBuffer {
-		panic(fmt.Sprintf("%s: written=%d: %s", what, n, err.Error()))
-	}
-	return n
-}
-
-func mustRead(what string, n int, err error) int {
-	if err != nil && err != io.EOF {
-		panic(fmt.Sprintf("%s: read=%d: %s", what, n, err.Error()))
-	}
-	return n
 }

@@ -3,6 +3,6 @@
 package freebuf
 
 const (
-	PartMinimalSize = 64
-	PartReadIncSize = 1024
+	PartMinimalSize = 1024
+	PartIncSize     = 1 << 8
 )

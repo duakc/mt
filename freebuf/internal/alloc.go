@@ -11,7 +11,7 @@ import (
 const MaxAllocatableSize = 1 << 16
 
 func Get(size int) []byte {
-	if size > MaxAllocatableSize || size == 0 {
+	if size > MaxAllocatableSize || size <= 0 {
 		return make([]byte, size)
 	}
 	return mainDefaultAllocator.Get(size)
@@ -19,10 +19,10 @@ func Get(size int) []byte {
 
 func Put(b []byte) bool {
 	var err error
-	if cap(b) <= MaxAllocatableSize && cap(b) != 0 {
+	if cap(b) > 0 && cap(b) <= MaxAllocatableSize {
 		err = mainDefaultAllocator.Put(b)
 	}
-	return err == nil && cap(b) != 0 && cap(b) <= MaxAllocatableSize
+	return err == nil && cap(b) > 0 && cap(b) <= MaxAllocatableSize
 }
 
 var mainDefaultAllocator = newDefaultAllocator()

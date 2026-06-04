@@ -162,6 +162,29 @@ func (b *SerialBuffer) ReadByte() (byte, error) {
 	return c, nil
 }
 
+func (b *SerialBuffer) ReadFromOnce(r io.Reader) (int, error) {
+	b.ensureFree(PartIncSize)
+	if len(b.data)-b.w == 0 {
+		return 0, io.ErrShortBuffer
+	}
+	n, err := ReadUntil(r, b.data[b.w:])
+	b.w += n
+	return n, err
+}
+
+func (b *SerialBuffer) WriteToOnce(w io.Writer) (int, error) {
+	if b.r == b.w {
+		return 0, io.EOF
+	}
+	n, err := WriteUntil(w, b.data[b.r:b.w])
+	b.r += n
+	if b.r == b.w {
+		b.r = 0
+		b.w = 0
+	}
+	return n, err
+}
+
 func (b *SerialBuffer) ReadFrom(r io.Reader) (n int64, err error) {
 	for {
 		b.ensureFree(PartIncSize)

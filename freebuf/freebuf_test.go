@@ -31,6 +31,23 @@ func (w *dummyWriter) Write(p []byte) (n int, err error) {
 	return sub, nil
 }
 
+type chunkReader struct {
+	chunks [][]byte
+}
+
+func (r *chunkReader) Read(p []byte) (int, error) {
+	if len(r.chunks) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, r.chunks[0])
+	if n < len(r.chunks[0]) {
+		r.chunks[0] = r.chunks[0][n:]
+	} else {
+		r.chunks = r.chunks[1:]
+	}
+	return n, nil
+}
+
 func TestReadUntil(t *testing.T) {
 	type Case struct {
 		Input   io.Reader

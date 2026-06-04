@@ -2,33 +2,10 @@ package freebuf
 
 import (
 	"bytes"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-// Data large enough to span many parts must round-trip cleanly through the
-// chunked storage.
-func TestMultiPartBuffer_WriteRead_MultiPart(t *testing.T) {
-	mp := NewMultiPart()
-	defer mp.FreeMe()
-
-	data := make([]byte, PartMinimalSize*5+13)
-	for i := range data {
-		data[i] = byte(i % 256)
-	}
-	n, err := mp.Write(data)
-	assert.NoError(t, err)
-	assert.Equal(t, len(data), n)
-
-	out := make([]byte, len(data))
-	n, err = mp.Read(out)
-	assert.NoError(t, err)
-	assert.Equal(t, len(data), n)
-	assert.Equal(t, data, out)
-	assert.Equal(t, 0, mp.Len())
-}
 
 // Regression
 func TestMultiPartBuffer_WriteByte_FullTailDoesNotLoseBytes(t *testing.T) {
@@ -56,16 +33,6 @@ func TestMultiPartBuffer_WriteByte_NoStrandedParts(t *testing.T) {
 	assert.Equal(t, 1, len(mp.parts))
 }
 
-// Regression
-func TestMultiPartBuffer_ReadFrom_PropagatesError(t *testing.T) {
-	mp := NewMultiPart()
-	defer mp.FreeMe()
-
-	n, err := mp.ReadFrom(&dummyReader{size: 0, err: io.ErrUnexpectedEOF})
-	assert.Equal(t, int64(0), n)
-	assert.Equal(t, io.ErrUnexpectedEOF, err)
-}
-
 func TestMultiPartBuffer_HeadCompactsOverTime(t *testing.T) {
 	mp := NewMultiPart()
 	defer mp.FreeMe()
@@ -78,34 +45,6 @@ func TestMultiPartBuffer_HeadCompactsOverTime(t *testing.T) {
 	}
 	assert.Equal(t, 0, mp.Len())
 	assert.LessOrEqual(t, len(mp.parts), 16)
-}
-
-func TestMultiPartBuffer_ReadFrom(t *testing.T) {
-	mp := NewMultiPart()
-	defer mp.FreeMe()
-
-	data := make([]byte, PartIncSize*2+100)
-	for i := range data {
-		data[i] = byte(i % 256)
-	}
-	n, err := mp.ReadFrom(bytes.NewReader(data))
-	assert.NoError(t, err)
-	assert.Equal(t, int64(len(data)), n)
-
-	out := make([]byte, len(data))
-	nn, _ := mp.Read(out)
-	assert.Equal(t, len(data), nn)
-	assert.Equal(t, data, out)
-}
-
-func TestMultiPartBuffer_WriteTo_Empty(t *testing.T) {
-	mp := NewMultiPart()
-	defer mp.FreeMe()
-
-	var out bytes.Buffer
-	n, err := mp.WriteTo(&out)
-	assert.Equal(t, int64(0), n)
-	assert.Equal(t, io.EOF, err)
 }
 
 func TestMultiPartBuffer_Reset(t *testing.T) {
@@ -161,24 +100,18 @@ func TestMultiPartBuffer_Chunks_EarlyBreak(t *testing.T) {
 	assert.Equal(t, 1, seen)
 }
 
-// Copy must produce an independent MultiPartBuffer whose chunks are backed by
-// fresh pool slices; mutations on either side must not bleed through.
-func TestMultiPartBuffer_Copy_Independent(t *testing.T) {
-	src := NewMultiPart()
-	defer src.FreeMe()
-	payload := bytes.Repeat([]byte{0xAB}, PartMinimalSize*2+50)
-	src.Write(payload)
+// Grow reserves at least n bytes of free space so subsequent Writes within
+// that budget don't trigger further allocations. Verifies the impl-specific
+// invariant (PartCount unchanged); the generic Grow contract is covered by
+// the black-box tests.
+func TestMultiPartBuffer_Grow_ReservesSpace(t *testing.T) {
+	mp := NewMultiPart()
+	defer mp.FreeMe()
 
-	cp := src.Copy()
-	defer cp.FreeMe()
-	assert.Equal(t, len(payload), cp.Len())
+	mp.Grow(PartMinimalSize * 5)
+	partsBefore := mp.PartCount()
 
-	// Mutate src, ensure cp is unaffected.
-	src.WriteByte(0xCD)
-	assert.Equal(t, len(payload), cp.Len())
-
-	out := make([]byte, len(payload))
-	n, _ := cp.Read(out)
-	assert.Equal(t, len(payload), n)
-	assert.Equal(t, payload, out)
+	mp.Write(bytes.Repeat([]byte{1}, PartMinimalSize*3))
+	assert.Equal(t, partsBefore, mp.PartCount())
 }
+

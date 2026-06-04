@@ -22,13 +22,13 @@ const serialMultiPartCrossover = internal.MaxAllocatableSize
 // the actual payload exceeds the hint the buffer still grows correctly, just
 // with the implementation chosen for `except` rather than the actual size.
 //
-// The Buffer interface intentionally omits the implementation-specific
-// helpers each concrete type carries (zero-copy access, Reset without
-// freeing, iteration over chunks, ...). Type-assert when you need them:
+// The Buffer interface carries Grow / ReadFrom* / WriteTo* / Copy uniformly
+// across implementations; type-assert only for impl-specific zero-copy helpers
+// (SerialBuffer.Next, MultiPartBuffer.Chunks) and inspection helpers (Cap,
+// PartCount, Reset):
 //
 //	buf := freebuf.NewExcept(size)
 //	if sb, ok := buf.(*freebuf.SerialBuffer); ok {
-//	    sb.Grow(extra)
 //	    chunk := sb.Next(n) // zero-copy
 //	}
 //	if mp, ok := buf.(*freebuf.MultiPartBuffer); ok {
@@ -39,4 +39,14 @@ func NewExcept(except int) Buffer {
 		return NewSerial()
 	}
 	return NewMultiPart()
+}
+
+// New returns a Buffer suited for an expected payload size of n bytes, with
+// at least n bytes of free space already reserved. Equivalent to
+// NewExcept(n) followed by Grow(n). Use when the size is known in advance and
+// you want to avoid grow-on-write overhead.
+func New(n int) Buffer {
+	buf := NewExcept(n)
+	buf.Grow(n)
+	return buf
 }

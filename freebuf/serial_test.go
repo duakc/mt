@@ -70,53 +70,6 @@ func TestSerialBuffer_FreeBytes_Grow_Truncated(t *testing.T) {
 	assert.Equal(t, []byte{10}, b.Bytes())
 }
 
-func TestSerialBuffer_ReadFrom(t *testing.T) {
-	b := NewSerial()
-	defer b.FreeMe()
-
-	data := make([]byte, PartIncSize*3+13)
-	for i := range data {
-		data[i] = byte(i ^ 0x5a)
-	}
-	n, err := b.ReadFrom(bytes.NewReader(data))
-	assert.NoError(t, err)
-	assert.Equal(t, int64(len(data)), n)
-
-	out := make([]byte, len(data))
-	nn, _ := b.Read(out)
-	assert.Equal(t, len(data), nn)
-	assert.Equal(t, data, out)
-}
-
-func TestSerialBuffer_ReadFrom_PropagatesError(t *testing.T) {
-	b := NewSerial()
-	defer b.FreeMe()
-
-	n, err := b.ReadFrom(&dummyReader{size: 0, err: io.ErrUnexpectedEOF})
-	assert.Equal(t, int64(0), n)
-	assert.Equal(t, io.ErrUnexpectedEOF, err)
-}
-
-func TestSerialBuffer_WriteTo_PropagatesError(t *testing.T) {
-	b := NewSerial()
-	defer b.FreeMe()
-
-	b.Write([]byte("hello"))
-	n, err := b.WriteTo(&dummyWriter{accepted: 0, err: io.ErrClosedPipe})
-	assert.Equal(t, int64(0), n)
-	assert.Equal(t, io.ErrClosedPipe, err)
-}
-
-func TestSerialBuffer_WriteTo_Empty(t *testing.T) {
-	b := NewSerial()
-	defer b.FreeMe()
-
-	var out bytes.Buffer
-	n, err := b.WriteTo(&out)
-	assert.Equal(t, int64(0), n)
-	assert.Equal(t, io.EOF, err)
-}
-
 func TestSerialBuffer_Limited_Overflow(t *testing.T) {
 	b := NewSerialLimited(8)
 	defer b.FreeMe()
@@ -210,30 +163,6 @@ func TestSerialBuffer_Next_ZeroCopy(t *testing.T) {
 	assert.Nil(t, b.Next(5))
 }
 
-// Copy on a populated buffer must return an independent buffer holding the
-// same unread bytes; mutating either side must not affect the other.
-func TestSerialBuffer_Copy_Independent(t *testing.T) {
-	src := NewSerial()
-	defer src.FreeMe()
-	src.Write([]byte("hello"))
-
-	cp := src.Copy()
-	defer cp.FreeMe()
-	assert.Equal(t, 5, cp.Len())
-
-	src.Write([]byte("!!!"))
-	cp.Write([]byte("???"))
-	assert.Equal(t, 8, src.Len())
-	assert.Equal(t, 8, cp.Len())
-
-	srcOut := make([]byte, 8)
-	cpOut := make([]byte, 8)
-	src.Read(srcOut)
-	cp.Read(cpOut)
-	assert.Equal(t, "hello!!!", string(srcOut))
-	assert.Equal(t, "hello???", string(cpOut))
-}
-
 // Copy on a limited buffer must preserve the limit so the copy enforces the
 // same ceiling on subsequent writes.
 func TestSerialBuffer_Copy_PreservesLimit(t *testing.T) {
@@ -248,5 +177,18 @@ func TestSerialBuffer_Copy_PreservesLimit(t *testing.T) {
 	// 3 more bytes fit, 4th overflows the limit.
 	n, err := cp.Write([]byte("xyzW"))
 	assert.Equal(t, 3, n)
+	assert.Equal(t, io.ErrShortBuffer, err)
+}
+
+// ReadFromOnce on a full limited buffer returns ErrShortBuffer without
+// invoking the reader. Specific to NewSerialLimited; the generic
+// ReadFromOnce contract is covered by the black-box tests.
+func TestSerialBuffer_ReadFromOnce_LimitedFull(t *testing.T) {
+	b := NewSerialLimited(4)
+	defer b.FreeMe()
+	b.Write([]byte("xxxx"))
+
+	n, err := b.ReadFromOnce(bytes.NewReader([]byte("more")))
+	assert.Equal(t, 0, n)
 	assert.Equal(t, io.ErrShortBuffer, err)
 }

@@ -197,6 +197,59 @@ func (c *MultiPartBuffer) PartCount() int {
 	return len(c.parts) - c.head
 }
 
+// Grow ensures at least n bytes of free space are available at the tail.
+// Reservation is satisfied by appending a single part sized to the shortfall
+// (rounded up to PartMinimalSize). Subsequent Write/WriteByte calls reuse it
+// without further allocation. Past the pool ceiling the part falls out of
+// sync.Pool — pay attention if you reserve more than 64KB at a time.
+func (c *MultiPartBuffer) Grow(n int) {
+	if n <= 0 {
+		return
+	}
+	if k := len(c.parts); k > 0 {
+		if free := c.parts[k-1].freeSpace(); free >= n {
+			return
+		} else {
+			n -= free
+		}
+	}
+	bp := alloc(n)
+	c.parts = append(c.parts, bp)
+}
+
+// ReadFromOnce performs a single Read call against r into the buffer's tail,
+// growing by one chunk if the current tail is full. Returns whatever the
+// underlying Read returned. Useful for nonblocking or bounded-step I/O loops
+// that need to interleave reads with other work.
+func (c *MultiPartBuffer) ReadFromOnce(r io.Reader) (int, error) {
+	bp := c.tail(PartIncSize)
+	n, err := ReadUntil(r, bp.data[bp.w:])
+	bp.w += n
+	c.total += n
+	return n, err
+}
+
+// WriteToOnce performs a single Write call against w consuming the head
+// chunk's unread bytes. Returns io.EOF if the buffer is empty. Partial writes
+// surface as io.ErrShortWrite; the bytes that were accepted remain consumed.
+func (c *MultiPartBuffer) WriteToOnce(w io.Writer) (int, error) {
+	for c.head < len(c.parts) {
+		bp := c.parts[c.head]
+		if bp.len() == 0 {
+			c.dropHead()
+			continue
+		}
+		n, err := WriteUntil(w, bp.data[bp.r:bp.w])
+		bp.r += n
+		c.total -= n
+		if bp.len() == 0 {
+			c.dropHead()
+		}
+		return n, err
+	}
+	return 0, io.EOF
+}
+
 // Reset discards all unread bytes, returning their backing parts to the pool.
 // The parts slice header is retained so subsequent writes can reuse it without
 // allocating a new slice. Call FreeMe to also release the slice header.

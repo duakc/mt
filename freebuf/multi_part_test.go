@@ -160,3 +160,25 @@ func TestMultiPartBuffer_Chunks_EarlyBreak(t *testing.T) {
 	}
 	assert.Equal(t, 1, seen)
 }
+
+// Copy must produce an independent MultiPartBuffer whose chunks are backed by
+// fresh pool slices; mutations on either side must not bleed through.
+func TestMultiPartBuffer_Copy_Independent(t *testing.T) {
+	src := NewMultiPart()
+	defer src.FreeMe()
+	payload := bytes.Repeat([]byte{0xAB}, PartMinimalSize*2+50)
+	src.Write(payload)
+
+	cp := src.Copy()
+	defer cp.FreeMe()
+	assert.Equal(t, len(payload), cp.Len())
+
+	// Mutate src, ensure cp is unaffected.
+	src.WriteByte(0xCD)
+	assert.Equal(t, len(payload), cp.Len())
+
+	out := make([]byte, len(payload))
+	n, _ := cp.Read(out)
+	assert.Equal(t, len(payload), n)
+	assert.Equal(t, payload, out)
+}

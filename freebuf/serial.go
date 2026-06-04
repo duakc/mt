@@ -52,6 +52,27 @@ func (b *SerialBuffer) FreeBytes() []byte {
 	return b.data[b.w:]
 }
 
+// Copy returns a deep copy of the unread bytes in a fresh SerialBuffer. The
+// limit is preserved; a limited source produces a limited copy with the same
+// ceiling pre-allocated. Read/write cursors on the copy start at the
+// beginning. The returned Buffer is the caller's to FreeMe.
+func (b *SerialBuffer) Copy() Buffer {
+	if b.limit > 0 {
+		cp := NewSerialLimited(b.limit)
+		if b.w > b.r {
+			cp.w = copy(cp.data, b.data[b.r:b.w])
+		}
+		return cp
+	}
+	n := b.w - b.r
+	if n == 0 {
+		return NewSerial()
+	}
+	cp := &SerialBuffer{data: getSerialBuffer(n)}
+	cp.w = copy(cp.data, b.data[b.r:b.w])
+	return cp
+}
+
 func (b *SerialBuffer) Truncated(n int) {
 	if n < 0 {
 		n = 0

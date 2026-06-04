@@ -3,6 +3,8 @@ package freebuf
 import (
 	"io"
 	"iter"
+
+	"github.com/duakc/mt"
 )
 
 var _ Buffer = (*MultiPartBuffer)(nil)
@@ -58,6 +60,21 @@ func (c *MultiPartBuffer) dropHead() {
 		c.parts = c.parts[:n]
 		c.head = 0
 	}
+}
+
+// Copy returns a deep copy of the unread bytes in a fresh MultiPartBuffer.
+// The new buffer has its own pool-backed parts; mutations on either side are
+// independent. The returned Buffer is the caller's to FreeMe.
+func (c *MultiPartBuffer) Copy() Buffer {
+	cp := NewMultiPart()
+	for i := c.head; i < len(c.parts); i++ {
+		bp := c.parts[i]
+		if bp.len() == 0 {
+			continue
+		}
+		mt.Must(cp.Write(bp.data[bp.r:bp.w]))
+	}
+	return cp
 }
 
 func (c *MultiPartBuffer) Write(p []byte) (n int, err error) {

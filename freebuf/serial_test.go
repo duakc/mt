@@ -209,3 +209,44 @@ func TestSerialBuffer_Next_ZeroCopy(t *testing.T) {
 	// Empty buffer returns nil.
 	assert.Nil(t, b.Next(5))
 }
+
+// Copy on a populated buffer must return an independent buffer holding the
+// same unread bytes; mutating either side must not affect the other.
+func TestSerialBuffer_Copy_Independent(t *testing.T) {
+	src := NewSerial()
+	defer src.FreeMe()
+	src.Write([]byte("hello"))
+
+	cp := src.Copy()
+	defer cp.FreeMe()
+	assert.Equal(t, 5, cp.Len())
+
+	src.Write([]byte("!!!"))
+	cp.Write([]byte("???"))
+	assert.Equal(t, 8, src.Len())
+	assert.Equal(t, 8, cp.Len())
+
+	srcOut := make([]byte, 8)
+	cpOut := make([]byte, 8)
+	src.Read(srcOut)
+	cp.Read(cpOut)
+	assert.Equal(t, "hello!!!", string(srcOut))
+	assert.Equal(t, "hello???", string(cpOut))
+}
+
+// Copy on a limited buffer must preserve the limit so the copy enforces the
+// same ceiling on subsequent writes.
+func TestSerialBuffer_Copy_PreservesLimit(t *testing.T) {
+	src := NewSerialLimited(8)
+	defer src.FreeMe()
+	src.Write([]byte("12345"))
+
+	cp := src.Copy()
+	defer cp.FreeMe()
+	assert.Equal(t, 5, cp.Len())
+
+	// 3 more bytes fit, 4th overflows the limit.
+	n, err := cp.Write([]byte("xyzW"))
+	assert.Equal(t, 3, n)
+	assert.Equal(t, io.ErrShortBuffer, err)
+}

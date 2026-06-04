@@ -12,6 +12,12 @@ type Buffer interface {
 
 	Len() int
 	FreeMe()
+
+	// Copy returns a deep copy of the unread bytes in a fresh Buffer of the
+	// same concrete type. Read/write cursors on the copy start at the
+	// beginning; the original is untouched. The returned Buffer must be
+	// released with FreeMe by the caller.
+	Copy() Buffer
 }
 
 func ReadUntil(r io.Reader, buf []byte) (n int, err error) {

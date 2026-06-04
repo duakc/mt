@@ -258,6 +258,11 @@ func (b *SerialBuffer) FreeMe() {
 	b.limit = 0
 }
 
+func (b *SerialBuffer) Close() error {
+	b.FreeMe()
+	return nil
+}
+
 // ensureFree makes a best effort to expose at least `need` bytes at b.data[b.w:].
 // It first compacts the unread region to the start, then grows the backing
 // buffer. When a limit is set, growth is capped at the limit and the caller is

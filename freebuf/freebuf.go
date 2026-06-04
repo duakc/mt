@@ -10,6 +10,13 @@ type Buffer interface {
 	io.ReaderFrom
 	io.WriterTo
 
+	// Closer is a alias for FreeMe().
+	// It make a ide detect the resource leak and add compatibility for
+	// a better go std env.
+	//
+	// This Method will always return a nil error.
+	io.Closer
+
 	Len() int
 	FreeMe()
 

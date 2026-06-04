@@ -240,3 +240,8 @@ func (c *MultiPartBuffer) FreeMe() {
 	c.head = 0
 	c.total = 0
 }
+
+func (c *MultiPartBuffer) Close() error {
+	c.FreeMe()
+	return nil
+}

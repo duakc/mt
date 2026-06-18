@@ -66,6 +66,13 @@ func (c *MultiPartBuffer) dropHead() {
 // The new buffer has its own pool-backed parts; mutations on either side are
 // independent. The returned Buffer is the caller's to FreeMe.
 func (c *MultiPartBuffer) Copy() Buffer {
+	return c.CopyMultiPart()
+}
+
+// CopyMultiPart is Copy with the concrete *MultiPartBuffer return type, sparing
+// callers that already hold a *MultiPartBuffer the type assertion on Copy's
+// Buffer result.
+func (c *MultiPartBuffer) CopyMultiPart() *MultiPartBuffer {
 	cp := NewMultiPart()
 	for i := c.head; i < len(c.parts); i++ {
 		bp := c.parts[i]

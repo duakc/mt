@@ -153,6 +153,45 @@ func ReadFileWithCounter(path string, readCounters []CounterFunc) (freebuf.Buffe
 	return buf, nil
 }
 
+// ReadFileBuffer reads the named file in full into the caller-supplied buf,
+// appending to whatever buf already holds, and returns the bytes read. Unlike
+// ReadFile it allocates no Buffer of its own; buf's lifecycle stays the
+// caller's. A regular file's size is reserved on buf up front so the read needs
+// no incremental growth.
+func ReadFileBuffer(path string, buf freebuf.Buffer) (int64, error) {
+	return ReadFileBufferWithCounter(path, buf, nil)
+}
+
+// ReadFileBufferWithCounter is ReadFileBuffer that also reports bytes read to
+// readCounters (see CounterFunc) as the file is consumed, for observability.
+func ReadFileBufferWithCounter(path string, buf freebuf.Buffer, readCounters []CounterFunc) (int64, error) {
+	// Stat before Open: it is usually much lighter, and lets us learn the size
+	// without an extra fstat. Only a regular file reports a meaningful size;
+	// pipes/devices report 0 and grow as they read.
+	var size int64
+	if info, statErr := os.Stat(path); statErr == nil && info.Mode().IsRegular() {
+		size = info.Size()
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	// Reserve only once the open has succeeded — Stat alone does not mean the
+	// file is readable.
+	if size > 0 {
+		buf.Grow(int(size))
+	}
+
+	var r io.Reader = f
+	if len(readCounters) > 0 {
+		r = NewCounterReader(f, readCounters...)
+	}
+	return buf.ReadFrom(r)
+}
+
 // WriteFile writes the unread contents of buf to the named file, creating it
 // (or truncating an existing file) with mode 0644. The buffer is drained
 // (WriteTo advances its read cursor); pass buf.Copy() first if you need to keep

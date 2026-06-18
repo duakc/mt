@@ -57,6 +57,13 @@ func (b *SerialBuffer) FreeBytes() []byte {
 // ceiling pre-allocated. Read/write cursors on the copy start at the
 // beginning. The returned Buffer is the caller's to FreeMe.
 func (b *SerialBuffer) Copy() Buffer {
+	return b.CopySerial()
+}
+
+// CopySerial is Copy with the concrete *SerialBuffer return type, sparing
+// callers that already hold a *SerialBuffer the type assertion on Copy's
+// Buffer result.
+func (b *SerialBuffer) CopySerial() *SerialBuffer {
 	if b.limit > 0 {
 		cp := NewSerialLimited(b.limit)
 		if b.w > b.r {

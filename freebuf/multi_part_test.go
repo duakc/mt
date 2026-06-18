@@ -114,4 +114,3 @@ func TestMultiPartBuffer_Grow_ReservesSpace(t *testing.T) {
 	mp.Write(bytes.Repeat([]byte{1}, PartMinimalSize*3))
 	assert.Equal(t, partsBefore, mp.PartCount())
 }
-

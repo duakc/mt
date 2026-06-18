@@ -325,7 +325,8 @@ func (b *SerialBuffer) ensureFree(need int) {
 // nextCap picks the next backing-buffer length that fits `need` bytes total.
 // Within the pool range it returns the next power of two >= PartMinimalSize so
 // internal.Get can hand back a slice with len == cap. Past the pool ceiling it
-// doubles the current size to keep amortized growth O(1).
+// grows geometrically (cur + cur>>serialGrowShift: 1.5x default, 1.25x low-mem)
+// to keep amortized growth O(1) while bounding overshoot.
 func (b *SerialBuffer) nextCap(need int) int {
 	if need < PartMinimalSize {
 		return PartMinimalSize
@@ -339,7 +340,7 @@ func (b *SerialBuffer) nextCap(need int) int {
 		return c
 	}
 
-	next := len(b.data) + PartIncSize
+	next := len(b.data) + len(b.data)>>serialGrowShift
 	if next < need {
 		return need
 	}

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/duakc/mt/freebuf"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type factory struct {
@@ -50,7 +50,6 @@ func TestBuffer(t *testing.T) {
 		for _, f := range factories() {
 			t.Run(strings.Join(
 				[]string{c.name, f.name}, "/"), func(t *testing.T) {
-
 				buf := f.new()
 				defer buf.FreeMe()
 				c.fn(t, buf)

@@ -8,16 +8,6 @@ import (
 	"github.com/duakc/mt/freebuf/internal"
 )
 
-type Simple []byte
-
-func NewSimple(size int) Simple {
-	return Simple(internal.Get(size)[:size])
-}
-
-func (s Simple) FreeMe() {
-	internal.Put(s)
-}
-
 var bytePartPool = sync.Pool{
 	New: func() any {
 		return new(bytePart)

@@ -125,9 +125,11 @@ func kernelZeroCopy(dst io.Writer, src io.Reader, writeCounters, readCounters []
 			return n, true, e
 		}
 	}
+
 	if n, h, e := spliceConn(srcConn, dstConn, writeCounters, readCounters); h {
 		return n, true, e
 	}
+
 	if srcFile {
 		if n, h, e := sendfileConn(srcConn, dstConn, writeCounters, readCounters); h {
 			return n, true, e

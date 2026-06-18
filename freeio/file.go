@@ -29,10 +29,12 @@ func CopyFS(dst string, fsys fs.FS) (written int64, files int, err error) {
 		if walkErr != nil {
 			return walkErr
 		}
+
 		target := filepath.Join(dst, filepath.FromSlash(path))
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+
 		if !d.Type().IsRegular() {
 			return fmt.Errorf("freeio: cannot copy %q: unsupported file mode %s", path, d.Type())
 		}
@@ -41,10 +43,12 @@ func CopyFS(dst string, fsys fs.FS) (written int64, files int, err error) {
 		if e != nil {
 			return e
 		}
+
 		in, e := fsys.Open(path)
 		if e != nil {
 			return e
 		}
+
 		defer in.Close()
 		out, e := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
 		if e != nil {
@@ -68,6 +72,15 @@ func CopyFS(dst string, fsys fs.FS) (written int64, files int, err error) {
 // CopyFileWithCounter is CopyFile that also reports progress to the counters
 // (see CounterFunc), for observing copy throughput, and returns the bytes copied.
 func CopyFileWithCounter(dst, src string, writeCounters, readCounters []CounterFunc) (written int64, err error) {
+	srcStat, srcStatErr := os.Stat(src)
+	if srcStatErr != nil {
+		return 0, err
+	}
+
+	if srcStat.IsDir() {
+		return 0, fmt.Errorf("freeio: cannot copy directory %q", src)
+	}
+
 	in, err := os.Open(src)
 	if err != nil {
 		return 0, err
@@ -75,22 +88,13 @@ func CopyFileWithCounter(dst, src string, writeCounters, readCounters []CounterF
 
 	defer in.Close()
 
-	info, err := in.Stat()
-	if err != nil {
-		return 0, err
-	}
-
-	if info.IsDir() {
-		return 0, fmt.Errorf("freeio: cannot copy directory %q", src)
-	}
-
 	// Refuse to copy a file onto itself: O_TRUNC would wipe the source before a
 	// single byte is read.
-	if di, statErr := os.Stat(dst); statErr == nil && os.SameFile(info, di) {
+	if dstStat, statErr := os.Stat(dst); statErr == nil && os.SameFile(srcStat, dstStat) {
 		return 0, fmt.Errorf("freeio: src and dst are the same file: %q", src)
 	}
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcStat.Mode().Perm())
 	if err != nil {
 		return 0, err
 	}

@@ -22,6 +22,11 @@ type Helper interface {
 	MkdirAll(path string, perm os.FileMode) error
 	Path(name string) string
 	Stat(name string) (os.FileInfo, error)
+
+	ReadFile(name string) ([]byte, error)
+	WriteFile(name string, data []byte, perm os.FileMode) error
+	MustReadFile(name string) []byte
+	MustWriteFile(name string, data []byte, perm os.FileMode)
 }
 
 var _ Helper = (*DefaultFileHelper)(nil)
@@ -33,6 +38,29 @@ type DefaultFileHelper struct {
 
 	closeOnce sync.Once
 	closeErr  error
+}
+
+func (h *DefaultFileHelper) ReadFile(name string) ([]byte, error) {
+	return h.root.ReadFile(name)
+}
+
+func (h *DefaultFileHelper) WriteFile(name string, data []byte, perm os.FileMode) error {
+	return h.root.WriteFile(name, data, perm)
+}
+
+func (h *DefaultFileHelper) MustReadFile(name string) []byte {
+	data, err := h.root.ReadFile(name)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func (h *DefaultFileHelper) MustWriteFile(name string, data []byte, perm os.FileMode) {
+	err := h.root.WriteFile(name, data, perm)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (h *DefaultFileHelper) ContextInject(ctx context.Context) context.Context {

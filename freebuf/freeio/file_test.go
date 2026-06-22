@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/duakc/mt/freebuf"
-	"github.com/duakc/mt/freeio"
+	"github.com/duakc/mt/freebuf/freeio"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -125,7 +125,7 @@ func TestReadFile(t *testing.T) {
 
 			// Round-trip the contents back out to verify they survived.
 			out := filepath.Join(t.TempDir(), "out")
-			require.NoError(t, freeio.WriteFile(out, buf))
+			require.NoError(t, freeio.WriteFile(out, buf, 0o644))
 			got, err := os.ReadFile(out)
 			require.NoError(t, err)
 			assert.Equal(t, tc.data, got)
@@ -140,7 +140,7 @@ func TestWriteFileEmpty(t *testing.T) {
 	defer buf.FreeMe()
 
 	out := filepath.Join(t.TempDir(), "empty")
-	require.NoError(t, freeio.WriteFile(out, buf))
+	require.NoError(t, freeio.WriteFile(out, buf, 0o644))
 
 	info, err := os.Stat(out)
 	require.NoError(t, err)

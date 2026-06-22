@@ -9,16 +9,11 @@ import (
 )
 
 const (
-	// copyChunkSize is the staging buffer size for the userspace fallback. 32KB
-	// matches io.Copy's own default scratch size and lands exactly on freebuf's
-	// 32KB pool bucket, so the buffer is pooled rather than heap-allocated.
-	copyChunkSize = 32 * 1024
-
-	// oneShotLimit is freebuf's pool max single-chunk allocation (64KB,
-	// internal.MaxAllocatableSize). A known length at or below it is staged in
-	// one contiguous pooled buffer and read in a single pass; above it, pooling
-	// no longer applies and we read in fixed chunks instead.
-	oneShotLimit = 1 << 16
+	// copyChunkSize is the staging buffer size for the userspace fallback. It is
+	// 8×PartMinimalSize — 32KB by default (matching io.Copy's scratch size and
+	// landing on the 32KB pool bucket), 8KB under the low-memory build, which
+	// trades copy throughput for footprint in line with that build's intent.
+	copyChunkSize = 8 * freebuf.PartMinimalSize
 
 	// maxZeroCopyChunk caps the bytes asked of one sendfile/copy_file_range
 	// syscall. Counters fire once per syscall, so this also bounds counting
@@ -135,21 +130,55 @@ func kernelZeroCopy(dst io.Writer, src io.Reader, writeCounters, readCounters []
 			return n, true, e
 		}
 	}
+
 	return 0, false, nil
 }
 
-// copyGeneric is the userspace fallback: CopyBuffer with a buffer we build
-// instead of borrow. When src's length is known (a *io.LimitedReader or a Len()
-// method) a small payload is staged in one contiguous pooled buffer; an unknown
-// or large length uses a fixed chunk read repeatedly.
+// copyGeneric is the userspace fallback. It stages through a raw pooled slice
+// (internal.Get) and a direct read→write loop — no freebuf.Buffer interface
+// dispatch. The chunk is copyChunkSize, shrunk to a small known length (a
+// *io.LimitedReader or a Len() method) so a tiny payload allocates only what it
+// needs.
 func copyGeneric(dst io.Writer, src io.Reader, writeCounters, readCounters []CounterFunc) (int64, error) {
 	size := copyChunkSize
-	if n, ok := knownLen(src); ok && n > 0 && n <= oneShotLimit {
+	if n, ok := knownLen(src); ok && n > 0 && n < int64(size) {
 		size = int(n)
 	}
-	buffer := freebuf.New(size)
-	defer buffer.FreeMe()
-	return copyWithBuffer(dst, src, buffer, writeCounters, readCounters)
+	buf := poolGet(size)
+	defer poolPut(buf)
+	return copyBuf(dst, src, buf, writeCounters, readCounters)
+}
+
+// copyBuf is io.Copy's read→write loop over a caller-owned scratch slice, with
+// per-chunk counting.
+func copyBuf(dst io.Writer, src io.Reader, buf []byte, writeCounters, readCounters []CounterFunc) (written int64, err error) {
+	for {
+		nr, rerr := src.Read(buf)
+		if nr > 0 {
+			for _, c := range readCounters {
+				c(int64(nr))
+			}
+			nw, werr := dst.Write(buf[:nr])
+			if nw > 0 {
+				written += int64(nw)
+				for _, c := range writeCounters {
+					c(int64(nw))
+				}
+			}
+			if werr != nil {
+				return written, werr
+			}
+			if nw < nr {
+				return written, io.ErrShortWrite
+			}
+		}
+		if rerr != nil {
+			if rerr != io.EOF {
+				err = rerr
+			}
+			return written, err
+		}
+	}
 }
 
 func copyWithBuffer(dst io.Writer, src io.Reader, buffer freebuf.Buffer, writeCounters, readCounters []CounterFunc) (written int64, err error) {

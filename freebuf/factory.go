@@ -42,9 +42,13 @@ func NewExcept(except int) Buffer {
 }
 
 // New returns a Buffer suited for an expected payload size of n bytes, with
-// at least n bytes of free space already reserved. Equivalent to
-// NewExcept(n) followed by Grow(n). Use when the size is known in advance and
-// you want to avoid grow-on-write overhead.
+// space for n bytes reserved up front. Equivalent to NewExcept(n) followed by
+// Grow(n). Use when the size is known in advance and you want to avoid
+// grow-on-write overhead.
+//
+// A SerialBuffer reserves all n bytes contiguously; a MultiPartBuffer (n above
+// the 64KB crossover) reserves one pool-ceiling-sized part and grows the rest
+// in pooled chunks as it fills, so it never allocates a single oversized part.
 func New(n int) Buffer {
 	buf := NewExcept(n)
 	buf.Grow(n)

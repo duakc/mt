@@ -204,11 +204,12 @@ func (c *MultiPartBuffer) PartCount() int {
 	return len(c.parts) - c.head
 }
 
-// Grow ensures at least n bytes of free space are available at the tail.
-// Reservation is satisfied by appending a single part sized to the shortfall
-// (rounded up to PartMinimalSize). Subsequent Write/WriteByte calls reuse it
-// without further allocation. Past the pool ceiling the part falls out of
-// sync.Pool — pay attention if you reserve more than 64KB at a time.
+// Grow ensures at least n bytes of free space are available at the tail by
+// appending a single pool-backed part. The part is capped at the pool ceiling
+// (maxSize): a larger request reserves one ceiling-sized part now and grows the
+// rest in pooled chunks as it is written, so a MultiPartBuffer never holds an
+// oversized off-pool part. Subsequent Write/WriteByte calls reuse the reserved
+// space without further allocation.
 func (c *MultiPartBuffer) Grow(n int) {
 	if n <= 0 {
 		return
@@ -219,6 +220,9 @@ func (c *MultiPartBuffer) Grow(n int) {
 		} else {
 			n -= free
 		}
+	}
+	if n > maxSize {
+		n = maxSize
 	}
 	bp := alloc(n)
 	c.parts = append(c.parts, bp)

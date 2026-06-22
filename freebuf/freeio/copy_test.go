@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/duakc/mt/freebuf"
-	"github.com/duakc/mt/freeio"
+	"github.com/duakc/mt/freebuf/freeio"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

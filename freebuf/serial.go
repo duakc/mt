@@ -120,17 +120,24 @@ func (b *SerialBuffer) WriteString(s string) (n int, err error) {
 	return n, err
 }
 
-// WriteByte is ~30–45% slower than bytes.Buffer.WriteByte in tight loops (see
-// BENCHMARK.md, BenchmarkBufferWriteByte_4K). The reason is inlining:
-// bytes.Buffer.WriteByte uses tryGrowByReslice — a 5-line helper the compiler
-// inlines, collapsing the hot path to "cap-len >= 1 → reslice → store byte".
-// ensureFree here is too large to inline (multiple branches, in-place compact,
-// pool Get/Put on growth), so every per-byte call pays a function-call
-// prologue/epilogue. Keeping the growth logic in one helper makes the bulk
-// paths (Write, WriteString, ReadFrom) simpler and stay equally fast; the
-// price is paid on per-byte writes. If your hot path is dominated by
-// WriteByte, reach for bytes.Buffer directly.
+// WriteByte appends c, growing the buffer when necessary. The common case —
+// the backing storage already has room — is an inlinable bounds check and
+// store, so a tight per-byte loop avoids a call into the (non-inlinable)
+// ensureFree on every byte. Only a full buffer falls through to writeByteGrow,
+// which compacts or grows before storing.
 func (b *SerialBuffer) WriteByte(c byte) error {
+	if b.w < len(b.data) {
+		b.data[b.w] = c
+		b.w++
+		return nil
+	}
+	return b.writeByteGrow(c)
+}
+
+// writeByteGrow is WriteByte's slow path: the backing storage is full, so
+// compact/grow via ensureFree and then store (or report io.ErrShortBuffer when
+// a limit forbids growth).
+func (b *SerialBuffer) writeByteGrow(c byte) error {
 	b.ensureFree(1)
 	if len(b.data)-b.w < 1 {
 		return io.ErrShortBuffer

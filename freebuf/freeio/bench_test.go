@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/duakc/mt/freebuf"
-	"github.com/duakc/mt/freeio"
+	"github.com/duakc/mt/freebuf/freeio"
 )
 
 // Each benchmark pairs a freeio implementation against its standard-library

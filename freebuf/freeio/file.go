@@ -99,12 +99,7 @@ func CopyFileWithCounter(dst, src string, writeCounters, readCounters []CounterF
 		return 0, err
 	}
 
-	defer func() {
-		if cerr := out.Close(); err == nil {
-			err = cerr
-		}
-	}()
-
+	defer out.Close()
 	written, err = CopyWithCounter(out, in, writeCounters, readCounters)
 	return written, err
 }
@@ -179,7 +174,7 @@ func ReadFileBufferWithCounter(path string, buf freebuf.Buffer, readCounters []C
 	}
 	defer f.Close()
 
-	// Reserve only once the open has succeeded — Stat alone does not mean the
+	// reserve only once the open has succeeded — Stat alone does not mean the
 	// file is readable.
 	if size > 0 {
 		buf.Grow(int(size))
@@ -196,22 +191,18 @@ func ReadFileBufferWithCounter(path string, buf freebuf.Buffer, readCounters []C
 // (or truncating an existing file) with mode 0644. The buffer is drained
 // (WriteTo advances its read cursor); pass buf.Copy() first if you need to keep
 // the contents.
-func WriteFile(path string, buf freebuf.Buffer) error {
-	return WriteFileWithCounter(path, buf, nil)
+func WriteFile(path string, buf freebuf.Buffer, perm os.FileMode) error {
+	return WriteFileWithCounter(path, buf, perm, nil)
 }
 
 // WriteFileWithCounter is WriteFile that also reports bytes written to
 // writeCounter (see CounterFunc) as the buffer is flushed, for observability.
-func WriteFileWithCounter(path string, buf freebuf.Buffer, writeCounters []CounterFunc) (err error) {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+func WriteFileWithCounter(path string, buf freebuf.Buffer, perm os.FileMode, writeCounters []CounterFunc) (err error) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-	}()
+	defer f.Close()
 
 	var w io.Writer = f
 	if len(writeCounters) > 0 {

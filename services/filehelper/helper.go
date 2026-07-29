@@ -20,11 +20,12 @@ type Helper interface {
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
 
 	MkdirAll(path string, perm os.FileMode) error
-	Path(name string) string
+	Path(name ...string) string
 	Stat(name string) (os.FileInfo, error)
 
 	ReadFile(name string) ([]byte, error)
 	WriteFile(name string, data []byte, perm os.FileMode) error
+
 	MustReadFile(name string) []byte
 	MustWriteFile(name string, data []byte, perm os.FileMode)
 }
@@ -122,8 +123,8 @@ func (h *DefaultFileHelper) MkdirAll(path string, perm os.FileMode) error {
 	return h.root.MkdirAll(path, perm)
 }
 
-func (h *DefaultFileHelper) Path(name string) string {
-	return filepath.Join(h.dir, name)
+func (h *DefaultFileHelper) Path(name ...string) string {
+	return filepath.Join(append([]string{h.dir}, name...)...)
 }
 
 func (h *DefaultFileHelper) mkdir(name string) error {

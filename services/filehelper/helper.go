@@ -72,6 +72,14 @@ func (h *DefaultFileHelper) Stat(name string) (os.FileInfo, error) {
 	return h.root.Stat(name)
 }
 
+func MustNew(dir string) *DefaultFileHelper {
+	fh, err := New(dir)
+	if err != nil {
+		panic(err)
+	}
+	return fh
+}
+
 func New(dir string) (*DefaultFileHelper, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {

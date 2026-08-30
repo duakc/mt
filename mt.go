@@ -91,8 +91,8 @@ func Distinct[T comparable, S ~[]T](arr S) S {
 	return v[:]
 }
 
-func Map[S any, D any, SA ~[]S, DA ~[]D](arr SA, fn func(S) D) DA {
-	retArr := make(DA, 0, len(arr))
+func Map[S any, D any](arr []S, fn func(S) D) []D {
+	retArr := make([]D, 0, len(arr))
 	for i := 0; i < len(arr); i++ {
 		retArr = append(retArr, fn(arr[i]))
 	}

@@ -150,3 +150,7 @@ func KeyValueMulti(e string) (key string, value string, found bool) {
 
 	return e[:i], e[j:], true
 }
+
+func WaitContext(ctx context.Context) {
+	<-ctx.Done()
+}

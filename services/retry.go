@@ -9,23 +9,28 @@ import (
 type RetryStartLifeCycle struct {
 	LifeCycle
 
-	Attempt int
+	attempt int
 
 	attempted int
-	err       []error
 
-	nextStage Stage
+	err   []error
+	stage Stage
 }
 
 func (rs *RetryStartLifeCycle) Reset(n int, stage Stage) {
-	rs.Attempt = n
+	rs.attempt = n
 	rs.attempted = 0
+	for i := 0; i < len(rs.err); i++ {
+		// avoid memory leak
+		rs.err[i] = nil
+	}
+
 	rs.err = nil
-	rs.nextStage = stage
+	rs.stage = stage
 }
 
 func (rs *RetryStartLifeCycle) StartOnce(ctx context.Context) (error, bool) {
-	if rs.Attempt <= 0 {
+	if rs.attempt <= 0 {
 		return errors.New("attempt must be greater than zero"), false
 	}
 
@@ -33,16 +38,16 @@ func (rs *RetryStartLifeCycle) StartOnce(ctx context.Context) (error, bool) {
 		return errors.New("nil lifecycle"), false
 	}
 
-	if rs.nextStage >= _stageMax {
+	if rs.stage >= _stageMax {
 		return nil, false
 	}
 
-	if rs.attempted >= rs.Attempt {
+	if rs.attempted >= rs.attempt {
 		if len(rs.err) == 0 {
 			return fmt.Errorf(
 				"reached max attempt %d at stage %s",
-				rs.Attempt,
-				rs.nextStage,
+				rs.attempt,
+				rs.stage.String(),
 			), false
 		}
 		return errors.Join(rs.err...), false
@@ -50,41 +55,31 @@ func (rs *RetryStartLifeCycle) StartOnce(ctx context.Context) (error, bool) {
 
 	rs.attempted++
 
-	err := rs.LifeCycle.Start(ctx, rs.nextStage)
+	err := rs.LifeCycle.Start(ctx, rs.stage)
 	if err != nil {
 		err = fmt.Errorf(
 			"attempt %d stage %s: %w",
 			rs.attempted,
-			rs.nextStage,
+			rs.stage.String(),
 			err,
 		)
 		rs.err = append(rs.err, err)
 
-		if rs.attempted < rs.Attempt {
+		if rs.attempted < rs.attempt {
 			return err, true
 		}
 
 		return errors.Join(rs.err...), false
 	}
 
-	rs.nextStage++
-	rs.attempted = 0
-
-	if rs.nextStage >= _stageMax {
-		return nil, false
-	}
-
 	return nil, true
 }
 
-func (rs *RetryStartLifeCycle) reachMax() bool {
-	return rs.attempted >= rs.Attempt
-}
-
-func StartRetry(
+func StartRetry[T LifeCycle](
 	ctx context.Context,
-	lifecycles []LifeCycle,
+	stage Stage,
 	attempt int,
+	lifecycles ...T,
 ) error {
 	if attempt <= 0 {
 		return errors.New("attempt must be greater than zero")
@@ -101,7 +96,7 @@ func StartRetry(
 		retry := &RetryStartLifeCycle{
 			LifeCycle: lifecycle,
 		}
-		retry.Reset(attempt, StagePreStart)
+		retry.Reset(attempt, stage)
 
 		queue = append(queue, indexedLifecycle{
 			index: index,

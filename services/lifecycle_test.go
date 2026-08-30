@@ -44,7 +44,7 @@ func TestStartService(t *testing.T) {
 		wantStages []services.Stage
 		wantErr    string // "" means no error; otherwise the Stage field expected on LifeCycleError
 	}{
-		{"runs every stage in order", -1, allStages, ""},
+		{"runs every stage in order", services.StagePostStart + 1, allStages, ""},
 		{"halts on PreStart failure", services.StagePreStart, allStages[:1], "PreStart"},
 		{"halts on Start failure", services.StageStart, allStages[:2], "Start"},
 		{"halts on PostStart failure", services.StagePostStart, allStages[:3], "PostStart"},
@@ -80,7 +80,7 @@ func TestCloseService(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			f := &fakeLifecycle{failAt: -1, closeErr: tc.closeErr}
+			f := &fakeLifecycle{failAt: services.StagePostStart + 1, closeErr: tc.closeErr}
 			err := services.CloseService(f)
 
 			assert.True(t, f.closed)

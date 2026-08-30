@@ -6,14 +6,14 @@ import (
 	"io"
 )
 
-type Stage int
+type Stage uint8
 
 const (
 	StagePreStart Stage = iota
 	StageStart
 	StagePostStart
 
-	_stageMax
+	stageMax
 )
 
 type LifeCycle interface {

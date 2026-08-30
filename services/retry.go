@@ -9,8 +9,7 @@ import (
 type RetryStartLifeCycle struct {
 	LifeCycle
 
-	attempt int
-
+	attempt   int
 	attempted int
 
 	err   []error
@@ -20,8 +19,9 @@ type RetryStartLifeCycle struct {
 func (rs *RetryStartLifeCycle) Reset(n int, stage Stage) {
 	rs.attempt = n
 	rs.attempted = 0
-	for i := 0; i < len(rs.err); i++ {
-		// avoid memory leak
+
+	// avoid retaining references to previous errors
+	for i := range rs.err {
 		rs.err[i] = nil
 	}
 
@@ -38,41 +38,38 @@ func (rs *RetryStartLifeCycle) StartOnce(ctx context.Context) (error, bool) {
 		return errors.New("nil lifecycle"), false
 	}
 
-	if rs.stage >= _stageMax {
-		return nil, false
-	}
-
 	if rs.attempted >= rs.attempt {
-		if len(rs.err) == 0 {
-			return fmt.Errorf(
-				"reached max attempt %d at stage %s",
-				rs.attempt,
-				rs.stage.String(),
-			), false
+		if len(rs.err) > 0 {
+			return errors.Join(rs.err...), false
 		}
-		return errors.Join(rs.err...), false
+
+		return fmt.Errorf(
+			"reached max attempt %d at stage %s",
+			rs.attempt,
+			rs.stage,
+		), false
 	}
 
 	rs.attempted++
 
 	err := rs.LifeCycle.Start(ctx, rs.stage)
-	if err != nil {
-		err = fmt.Errorf(
-			"attempt %d stage %s: %w",
-			rs.attempted,
-			rs.stage.String(),
-			err,
-		)
-		rs.err = append(rs.err, err)
-
-		if rs.attempted < rs.attempt {
-			return err, true
-		}
-
-		return errors.Join(rs.err...), false
+	if err == nil {
+		return nil, false
 	}
 
-	return nil, true
+	err = fmt.Errorf(
+		"attempt %d stage %s: %w",
+		rs.attempted,
+		rs.stage,
+		err,
+	)
+	rs.err = append(rs.err, err)
+
+	if rs.attempted < rs.attempt {
+		return err, true
+	}
+
+	return errors.Join(rs.err...), false
 }
 
 func StartRetry[T LifeCycle](

@@ -12,6 +12,8 @@ const (
 	StagePreStart Stage = iota
 	StageStart
 	StagePostStart
+
+	_stageMax
 )
 
 type LifeCycle interface {
